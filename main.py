@@ -1,16 +1,19 @@
+# Flask server with RCDevices integration
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template_string, request, jsonify
 from print_labels import LabelPrinter
+from hardware import RCDevicesClient  # Import class from hardware.py
 import os
 
 app = Flask(__name__)
 
-# HTML template (можно вынести в отдельный файл templates/index.html)
+# HTML template with device info section
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Принтер этикеток</title>
+    <title>Принтер этикеток - RCDevices</title>
     <style>
         * {
             margin: 0;
@@ -62,9 +65,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             margin-bottom: 10px;
         }
 
-        .header p {
-            color: #7f8c8d;
+        .device-info {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .device-info.error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .device-info.success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .device-field {
+            margin-bottom: 8px;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            align-items: center;
+        }
+
+        .device-field strong {
+            color: #2c3e50;
+            min-width: 140px;
+        }
+
+        .status-icon {
+            margin-left: 10px;
             font-size: 16px;
+        }
+
+        .status-icon.green {
+            color: #28a745;
+        }
+
+        .status-icon.red {
+            color: #dc3545;
+        }
+
+        .device-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .btn.disabled {
+            background: #6c757d !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
         }
 
         .form-group {
@@ -79,7 +142,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             font-size: 14px;
         }
 
-        input[type="text"], input[type="number"], select {
+        input[type="text"] {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e1e8ed;
@@ -89,24 +152,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: #f8f9fa;
         }
 
-        input[type="text"]:focus, input[type="number"]:focus, select:focus {
+        input[type="text"]:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
             background: white;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 5px;
-        }
-
-        input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            accent-color: #667eea;
         }
 
         .btn {
@@ -126,10 +176,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn:active {
-            transform: translateY(0);
         }
 
         .btn:disabled {
@@ -159,121 +205,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-
-        .status.loading {
-            background: #e2e3e5;
-            color: #383d41;
-            border: 1px solid #d6d8db;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .advanced-options {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            border: 1px solid #e9ecef;
-        }
-
-        .advanced-header {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            color: #495057;
-            font-weight: 500;
-        }
-
-        .advanced-content {
-            display: none;
-        }
-
-        .advanced-content.show {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .toggle-icon {
-            transition: transform 0.3s ease;
-        }
-
-        .toggle-icon.rotated {
-            transform: rotate(180deg);
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🏷️ Принтер этикеток</h1>
-            <p>Создание и печать этикеток с QR-кодами</p>
+        </div>
+
+        <div id="deviceInfo" class="device-info">
+            📡 Загрузка информации об устройстве...
         </div>
 
         <form id="labelForm">
             <div class="form-group">
                 <label for="serialNumber">Серийный номер *</label>
-                <input type="text" id="serialNumber" name="serial_number" placeholder="RC-103-000126" required>
+                <input type="text" id="serialNumber" name="serial_number" placeholder="Будет заполнен автоматически" readonly>
             </div>
 
-            <div class="form-group">
-                <label for="templatePdf">Шаблон PDF</label>
-                <input type="text" id="templatePdf" name="template_pdf" value="templ_103.pdf" placeholder="templ_103.pdf">
-            </div>
-
-            <div class="form-group">
-                <div class="checkbox-group">
-                    <input type="checkbox" id="addQr" name="add_qr" checked>
-                    <label for="addQr">Добавить QR-код</label>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <div class="checkbox-group">
-                    <input type="checkbox" id="printAfter" name="print_after" checked>
-                    <label for="printAfter">Печатать после создания</label>
-                </div>
-            </div>
-
-            <div class="advanced-options">
-                <div class="advanced-header" onclick="toggleAdvanced()">
-                    <span>⚙️ Дополнительные настройки</span>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div class="advanced-content" id="advancedContent">
-                    <div class="form-group">
-                        <label for="scale">Масштаб печати</label>
-                        <input type="number" id="scale" name="scale" value="1.0" step="0.1" min="0.1" max="3.0">
-                    </div>
-                    
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="showGrid" name="show_grid">
-                            <label for="showGrid">Показать координатную сетку</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <button type="button" class="btn" onclick="getDeviceSerial()">
+                🔄 Получить серийный номер с устройства
+            </button>
 
             <button type="submit" class="btn" id="submitBtn">
                 🖨️ Создать и распечатать этикетку
@@ -284,14 +236,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <script>
-        function toggleAdvanced() {
-            const content = document.getElementById('advancedContent');
-            const icon = document.querySelector('.toggle-icon');
-            
-            content.classList.toggle('show');
-            icon.classList.toggle('rotated');
-        }
-
         function showStatus(message, type) {
             const status = document.getElementById('status');
             status.className = `status ${type}`;
@@ -305,36 +249,117 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+        async function getDeviceSerial() {
+            try {
+                // Сначала обновляем информацию об устройстве
+                await loadDeviceInfo();
+                
+                const response = await fetch('/get_device_info');
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('serialNumber').value = result.serial;
+                    showStatus('✅ Серийный номер получен с устройства', 'success');
+                } else {
+                    showStatus('❌ ' + result.message, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Ошибка соединения с сервером', 'error');
+            }
+        }
+
+        async function loadDeviceInfo() {
+            try {
+                const response = await fetch('/device_status');
+                const result = await response.json();
+                
+                const deviceInfo = document.getElementById('deviceInfo');
+                
+                if (result.success) {
+                    deviceInfo.className = 'device-info success';
+                    
+                    // Check device readiness
+                    const testsOk = result.tests_ok === 1;
+                    const calibOk = result.calibration_ok === 1;
+                    const progTimeOk = result.prog_time > 0;
+                    const calibTimeOk = result.calib_time > 0;
+                    
+                    const isDeviceReady = testsOk && calibOk && progTimeOk && calibTimeOk;
+                    
+                    let warningHtml = '';
+                    if (!isDeviceReady) {
+                        warningHtml = '<div class="device-warning">⚠️ <strong>УСТРОЙСТВО НЕ ГОТОВО!</strong> Печать этикетки заблокирована.</div>';
+                    }
+                    
+                    deviceInfo.innerHTML = `
+                        ✅ <strong>Устройство подключено</strong><br><br>
+                        <div class="device-field">
+                            <strong>Serial:</strong> ${result.serial}
+                        </div>
+                        <div class="device-field">
+                            <strong>Tests OK:</strong> ${result.tests_ok}
+                            <span class="status-icon ${testsOk ? 'green' : 'red'}">${testsOk ? '✅' : '❌'}</span>
+                        </div>
+                        <div class="device-field">
+                            <strong>Calibration OK:</strong> ${result.calibration_ok}
+                            <span class="status-icon ${calibOk ? 'green' : 'red'}">${calibOk ? '✅' : '❌'}</span>
+                        </div>
+                        <div class="device-field">
+                            <strong>Program Time:</strong> ${result.prog_time}
+                            <span class="status-icon ${progTimeOk ? 'green' : 'red'}">${progTimeOk ? '✅' : '❌'}</span>
+                        </div>
+                        <div class="device-field">
+                            <strong>Calibration Time:</strong> ${result.calib_time}
+                            <span class="status-icon ${calibTimeOk ? 'green' : 'red'}">${calibTimeOk ? '✅' : '❌'}</span>
+                        </div>
+                        <div class="device-field">
+                            <strong>Status:</strong> ${isDeviceReady ? 'READY' : 'NOT READY'}
+                            <span class="status-icon ${isDeviceReady ? 'green' : 'red'}">${isDeviceReady ? '✅' : '❌'}</span>
+                        </div>
+                        ${warningHtml}
+                    `;
+                    
+                    // Enable/disable print button based on device readiness
+                    const submitBtn = document.getElementById('submitBtn');
+                    if (isDeviceReady) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('disabled');
+                        submitBtn.innerHTML = '🖨️ Создать и распечатать этикетку';
+                    } else {
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('disabled');
+                        submitBtn.innerHTML = '❌ Устройство не готово к печати';
+                    }
+                } else {
+                    deviceInfo.className = 'device-info error';
+                    deviceInfo.innerHTML = `❌ <strong>Ошибка:</strong> ${result.message}`;
+                }
+            } catch (error) {
+                const deviceInfo = document.getElementById('deviceInfo');
+                deviceInfo.className = 'device-info error';
+                deviceInfo.innerHTML = '❌ <strong>Ошибка соединения с сервером</strong>';
+            }
+        }
+
         document.getElementById('labelForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const submitBtn = document.getElementById('submitBtn');
-            const formData = new FormData(this);
+            const serialNumber = document.getElementById('serialNumber').value.trim();
             
-            // Convert form data to JSON
-            const data = {};
-            for (let [key, value] of formData.entries()) {
-                if (key === 'add_qr' || key === 'print_after' || key === 'show_grid') {
-                    data[key] = true;
-                } else {
-                    data[key] = value;
-                }
+            // Check if button is disabled (device not ready)
+            if (submitBtn.disabled || submitBtn.classList.contains('disabled')) {
+                showStatus('❌ Устройство не готово к печати. Проверьте статус устройства.', 'error');
+                return;
             }
             
-            // Handle unchecked checkboxes
-            const checkboxes = ['add_qr', 'print_after', 'show_grid'];
-            checkboxes.forEach(checkbox => {
-                if (!data[checkbox]) {
-                    data[checkbox] = false;
-                }
-            });
-            
-            // Convert scale to float
-            data.scale = parseFloat(data.scale);
+            if (!serialNumber) {
+                showStatus('❌ Сначала получите серийный номер с устройства', 'error');
+                return;
+            }
             
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<div class="spinner"></div>Обработка...';
-            showStatus('<div class="spinner"></div>Создание этикетки...', 'loading');
+            submitBtn.innerHTML = '⏳ Печать...';
             
             try {
                 const response = await fetch('/print_label', {
@@ -342,49 +367,105 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({
+                        serial_number: serialNumber,
+                        template_pdf: 'templ_103.pdf',
+                        add_qr: true,
+                        print_after: true
+                    })
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
                     showStatus('✅ ' + result.message, 'success');
-                    document.getElementById('serialNumber').value = '';
                 } else {
                     showStatus('❌ ' + result.message, 'error');
                 }
             } catch (error) {
                 showStatus('❌ Ошибка соединения с сервером', 'error');
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🖨️ Создать и распечатать этикетку';
+                // Restore button state based on device readiness
+                await loadDeviceInfo(); // Refresh device status to restore proper button state
             }
         });
 
-        // Auto-focus on serial number input
-        document.getElementById('serialNumber').focus();
+        // Load device info on page load
+        loadDeviceInfo();
     </script>
 </body>
 </html>"""
 
-# Создаем экземпляр принтера
+# Create instances
 printer = LabelPrinter(enable_logging=False, temp_filename="web_label.pdf")
+rc_client = RCDevicesClient()
 
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/device_status')
+def device_status():
+    """Get device status"""
+    try:
+        device = rc_client.get_single_device()
+        
+        handle = device["handle"]
+        mcu_id = device["mcu_id"]
+        serial = device["serial"]
+        db_info = device["db_info"]
+        
+        mcu_str = ' '.join(f'{b:02X}' for b in mcu_id) if mcu_id else 'Error'
+        status = 'READY' if db_info['result'] == 0 and db_info['tests_ok'] and db_info['calibration_ok'] else 'ERROR'
+        
+        return jsonify({
+            'success': True,
+            'handle': f'{handle:X}',
+            'mcu_id': mcu_str,
+            'serial': serial if serial else 'Error',
+            'tests_ok': db_info['tests_ok'],
+            'calibration_ok': db_info['calibration_ok'],
+            'prog_time': db_info['prog_time'],
+            'calib_time': db_info['calib_time'],
+            'status': status
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/get_device_info')
+def get_device_info():
+    """Get device serial number"""
+    try:
+        device = rc_client.get_single_device()
+        serial = device["serial"]
+        
+        if not serial:
+            return jsonify({
+                'success': False,
+                'message': 'Не удалось получить серийный номер с устройства'
+            })
+        
+        return jsonify({
+            'success': True,
+            'serial': serial
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
 @app.route('/print_label', methods=['POST'])
 def print_label():
+    """Print label with serial from device"""
     try:
         data = request.get_json()
-        
         serial_number = data.get('serial_number', '').strip()
-        template_pdf = data.get('template_pdf', 'templ_103.pdf').strip()
-        add_qr = data.get('add_qr', True)
-        print_after = data.get('print_after', True)
-        show_grid = data.get('show_grid', False)
-        scale = data.get('scale', 1.0)
         
         if not serial_number:
             return jsonify({
@@ -392,35 +473,18 @@ def print_label():
                 'message': 'Серийный номер не может быть пустым'
             })
         
-        if not template_pdf:
-            template_pdf = 'templ_103.pdf'
-        
-        # Проверяем существование шаблона
-        if not os.path.exists(template_pdf):
-            return jsonify({
-                'success': False,
-                'message': f'Файл шаблона {template_pdf} не найден'
-            })
-        
-        # Создаем и печатаем этикетку
+        # Create and print label
         success = printer.create_and_print_label(
             serial_number=serial_number,
-            template_pdf=template_pdf,
-            add_qr=add_qr,
-            print_after_create=print_after,
-            show_grid=show_grid,
-            scale=scale
+            template_pdf='templ_103.pdf',
+            add_qr=True,
+            print_after_create=True
         )
         
         if success:
-            if print_after:
-                message = f'Этикетка "{serial_number}" успешно создана и отправлена на печать!'
-            else:
-                message = f'Этикетка "{serial_number}" успешно создана!'
-            
             return jsonify({
                 'success': True,
-                'message': message
+                'message': f'Этикетка "{serial_number}" успешно создана и отправлена на печать!'
             })
         else:
             return jsonify({
@@ -434,25 +498,8 @@ def print_label():
             'message': f'Ошибка сервера: {str(e)}'
         })
 
-@app.route('/status')
-def status():
-    """Статус сервера и доступных принтеров"""
-    try:
-        printers = printer.get_available_printers()
-        return jsonify({
-            'success': True,
-            'current_printer': printer.printer_name,
-            'available_printers': printers,
-            'temp_filename': printer.temp_filename
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': str(e)
-        })
-
 if __name__ == '__main__':
-    print("🚀 Запуск веб-сервера принтера этикеток...")
+    print("🚀 Запуск веб-сервера принтера этикеток с RCDevices...")
     print("📍 Откройте браузер и перейдите по адресу: http://localhost:5000")
     print("⏹️  Для остановки нажмите Ctrl+C")
     
