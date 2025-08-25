@@ -1,4 +1,4 @@
-RCDevices Log File    Aug 25, 2025  12:48:30
+RCDevices Log File    Aug 25, 2025  13:46:54
 
    RCDevices build:     1.00
    RCDevices version:   1.00
@@ -15,21 +15,21 @@ System Language Id:     0x0419
 User Language Id:       0x2000
 System Default CP:      1251  (ANSI - Cyrillic)
 User locale:            ru-BY
-RAM Total/Free:         16,072/3,520 MB
+RAM Total/Free:         16,072/2,735 MB
 Number of processors:   20
 Battery:                No
 User:                   Aleksey Titov
 IsUserAnAdmin:          No
 UAC virtualization:     No
-Process Id:             25944 = 6558
-Main thread Id:         18008 = 4658
+Process Id:             22916 = 5984
+Main thread Id:         10520 = 2918
 Startup dir:            "C:\Users\Aleksey Titov\Documents\ExternGit\UniPRT_SDK_Python\UniPRT_SDK_Python\Windows\Example\Python_pyd"
 Command line:           "dll_wrapper.exe list"
 
 
 
 ======= USB device list =======
-#0: "Port_#0003.Hub_#0001": "Phyton USB Device", "\\?\usb#vid_0483&pid_f123#rc-103-013931#{a5dcbf10-6530-11d2-901f-00c04fb951ed}"
+#0: "Port_#0003.Hub_#0001": "Phyton USB Device", "\\?\usb#vid_0483&pid_f123#rc-102-011242#{a5dcbf10-6530-11d2-901f-00c04fb951ed}"
 
 
-Opening device "\\?\usb#vid_0483&pid_f123#rc-103-013931#{a5dcbf10-6530-11d2-901f-00c04fb951ed}"...Failed: A device attached to the system is not functioning.
+Opening device "\\?\usb#vid_0483&pid_f123#rc-102-011242#{a5dcbf10-6530-11d2-901f-00c04fb951ed}"...Failed: A device attached to the system is not functioning.
