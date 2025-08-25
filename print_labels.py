@@ -11,10 +11,15 @@ from PIL import Image, ImageWin
 import fitz
 import logging
 import os
+import psycopg2
+import socket
+from datetime import datetime
 
 
 class LabelPrinter:
-    def __init__(self, enable_logging=True, temp_filename="temp_label.pdf"):
+    def __init__(self, enable_logging=True, temp_filename="temp_label.pdf",
+                 db_host='192.168.88.132', db_port=5432, db_name='production_db',
+                 db_user='emqx_user', db_password='zxtbd'):
         # Label position settings
         self.label_x_mm = 27
         self.label_y_mm = 13.3
@@ -36,6 +41,18 @@ class LabelPrinter:
         self.print_width = None
         self.print_height = None
         
+        # Database settings
+        self.db_config = {
+            'host': db_host,
+            'port': db_port,
+            'database': db_name,
+            'user': db_user,
+            'password': db_password
+        }
+        
+        # Get computer name for station_id
+        self.station_id = socket.gethostname()
+        
         # Logging and file settings
         self.enable_logging = enable_logging
         self.temp_filename = temp_filename
@@ -51,7 +68,7 @@ class LabelPrinter:
                 ]
             )
             self.logger = logging.getLogger(__name__)
-            self.logger.info("LabelPrinter initialized with logging enabled")
+            self.logger.info(f"LabelPrinter initialized with logging enabled (Station: {self.station_id})")
         else:
             # Disable logging
             self.logger = logging.getLogger(__name__)
@@ -64,6 +81,62 @@ class LabelPrinter:
                 def error(self, msg): pass
                 def critical(self, msg): pass
             self.logger = NullLogger()
+    
+    def get_db_connection(self):
+        """Подключение к PostgreSQL"""
+        try:
+            conn = psycopg2.connect(**self.db_config)
+            return conn
+        except Exception as e:
+            self.logger.error(f"Ошибка подключения к БД: {e}")
+            return None
+    
+    def save_device_to_db(self, barcode: str):
+        """Сохранение устройства в БД со статусом preready"""
+        try:
+            self.logger.info(f"Сохранение в БД: {barcode} (preready)")
+            
+            conn = self.get_db_connection()
+            if not conn:
+                raise Exception("Не удалось подключиться к базе данных")
+            
+            try:
+                with conn.cursor() as cursor:
+                    # UPSERT запрос для записи устройства со статусом preready
+                    sql = """
+                    INSERT INTO ready_devices (barcode, scanner_id, scan_timestamp, station_id, status)
+                    VALUES (%s, %s, NOW(), %s, %s)
+                    ON CONFLICT (barcode)
+                    DO UPDATE SET
+                        scan_timestamp = NOW(),
+                        updated_at = NOW(),
+                        scanner_id = EXCLUDED.scanner_id,
+                        station_id = EXCLUDED.station_id,
+                        status = EXCLUDED.status
+                    RETURNING id, scan_timestamp;
+                    """
+                    
+                    cursor.execute(sql, (barcode, 'print_label', self.station_id, 'preready'))
+                    result = cursor.fetchone()
+                    conn.commit()
+                    
+                    if result:
+                        device_id, scan_time = result
+                        self.logger.info(f"[OK] Успешно сохранено в БД: {barcode} (ID: {device_id}, Status: preready)")
+                        return True
+                    else:
+                        raise Exception("Не получен результат от БД")
+                        
+            except Exception as db_error:
+                conn.rollback()
+                self.logger.error(f"Ошибка выполнения SQL запроса: {db_error}")
+                raise
+            finally:
+                conn.close()
+                
+        except Exception as e:
+            self.logger.error(f"Ошибка сохранения в БД: {e}")
+            return False
     
     def create_label(self, serial_number: str, template_pdf: str, output_pdf: str = None, 
                     show_grid=False, add_qr=True):
@@ -248,22 +321,72 @@ class LabelPrinter:
                              output_pdf: str = None, show_grid=False, add_qr=True,
                              print_after_create=True, printer_name: str = None, 
                              scale: float = None):
-        """Create and print label"""
+        """Create and print label with database recording"""
         if output_pdf is None:
             output_pdf = self.temp_filename
         
         self.logger.info(f"Creating and printing label: {serial_number}")
         
-        self.create_label(serial_number, template_pdf, output_pdf, show_grid, add_qr)
-        
-        if print_after_create:
-            return self.print_label(output_pdf, printer_name, scale)
-        return True
+        try:
+            # Сначала пытаемся сохранить в БД
+            if not self.save_device_to_db(serial_number):
+                error_msg = f"[ERROR] Ошибка записи в БД для {serial_number}. Печать отменена."
+                self.logger.error(error_msg)
+                raise Exception("Ошибка записи в базу данных")
+            
+            # Если запись в БД успешна, создаем этикетку
+            self.create_label(serial_number, template_pdf, output_pdf, show_grid, add_qr)
+            
+            # Печатаем этикетку если требуется
+            if print_after_create:
+                print_result = self.print_label(output_pdf, printer_name, scale)
+                if print_result:
+                    self.logger.info(f"[OK] Этикетка {serial_number} успешно напечатана и записана в БД")
+                else:
+                    self.logger.error(f"[ERROR] Ошибка печати этикетки {serial_number}")
+                return print_result
+            else:
+                self.logger.info(f"[OK] Этикетка {serial_number} создана и записана в БД")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"[ERROR] Общая ошибка при создании/печати этикетки {serial_number}: {e}")
+            return False
     
     def set_temp_filename(self, filename: str):
         """Set the temporary filename for label files"""
         self.temp_filename = filename
         self.logger.debug(f"Temporary filename set to: {filename}")
+    
+    def set_db_config(self, host=None, port=None, database=None, user=None, password=None):
+        """Update database configuration"""
+        if host is not None:
+            self.db_config['host'] = host
+        if port is not None:
+            self.db_config['port'] = port
+        if database is not None:
+            self.db_config['database'] = database
+        if user is not None:
+            self.db_config['user'] = user
+        if password is not None:
+            self.db_config['password'] = password
+        
+        self.logger.info(f"Database config updated: {self.db_config['user']}@{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}")
+    
+    def test_db_connection(self):
+        """Test database connection"""
+        try:
+            conn = self.get_db_connection()
+            if conn:
+                conn.close()
+                self.logger.info("[OK] Подключение к БД успешно")
+                return True
+            else:
+                self.logger.error("[ERROR] Ошибка подключения к БД")
+                return False
+        except Exception as e:
+            self.logger.error(f"[ERROR] Тест подключения к БД провален: {e}")
+            return False
     
     def enable_disable_logging(self, enable: bool):
         """Enable or disable logging at runtime"""
@@ -294,6 +417,12 @@ class LabelPrinter:
         print(f"Offset: X={self.print_offset_x}px, Y={self.print_offset_y}px")
         print(f"Print area: {self.print_width}x{self.print_height}")
         
+        print(f"\n=== DATABASE SETTINGS ===")
+        print(f"Host: {self.db_config['host']}:{self.db_config['port']}")
+        print(f"Database: {self.db_config['database']}")
+        print(f"User: {self.db_config['user']}")
+        print(f"Station ID: {self.station_id}")
+        
         print(f"\n=== FILE SETTINGS ===")
         print(f"Temporary filename: {self.temp_filename}")
         print(f"Logging enabled: {self.enable_logging}")
@@ -306,26 +435,38 @@ class LabelPrinter:
 
 # Usage examples
 if __name__ == "__main__":
-    # Initialize with logging disabled and custom temp filename
-    printer = LabelPrinter(enable_logging=False, temp_filename="label.pdf")
-    
-    # Or with logging enabled (default)
-    # printer = LabelPrinter()
-    
-    # Or with default temp filename and logging disabled
-    # printer = LabelPrinter(enable_logging=False)
+    # Initialize with default database settings
+    printer = LabelPrinter(enable_logging=True, temp_filename="label.pdf")
 
-    # Create labels (will use same filename and overwrite)
-     #printer.create_and_print_label("RC-103-000123", "templ_103.pdf", scale=1.0)
-     #printer.create_and_print_label("RC-103-000124", "templ_103.pdf", scale=1.0)
+    result = printer.create_and_print_label(
+            "TEST-RC-001", 
+            "templ_103.pdf", 
+            scale=1.0,
+            print_after_create=True  # Установите False если не хотите физически печатать
+    )
     
-    # Change temp filename if needed
-     #printer.set_temp_filename("my_label.pdf")
-     #printer.create_and_print_label("RC-103-000125", "templ_103.pdf", scale=1.0)
+   
+    print(f"[ERROR] Исключение: {e}")
     
-    # Enable/disable logging at runtime
-    printer.create_and_print_label("RC-103-000126", "templ_103.pdf", scale=1.0)
-    #printer.enable_disable_logging(False)  # Disable logging
+    # Or with custom database settings
+    # printer = LabelPrinter(
+    #     enable_logging=True, 
+    #     temp_filename="label.pdf",
+    #     db_host='192.168.1.100',
+    #     db_name='my_production_db'
+    # )
+
+    
+    
+    # Test database connection
+    if printer.test_db_connection():
+        print("[OK] База данных доступна")
+    else:
+        print("[ERROR] Проблемы с базой данных")
+    
+    # Create and print labels (will record in database with preready status)
+    # printer.create_and_print_label("RC-103-000123", "templ_103.pdf", scale=1.0)
+    # printer.create_and_print_label("RC-103-000124", "templ_103.pdf", scale=1.0)
     
     # Show settings
     printer.print_settings()
