@@ -835,7 +835,7 @@
                 icon.textContent = stepNum;
             }
         }
-
+        
         async function connectDevice() {
             updateStepState('step1', 'active');
             updateProgress(1);
@@ -859,10 +859,61 @@
                     // Show device status box
                     document.getElementById('deviceStatusBox').style.display = 'block';
                     
-                    // Automatically validate device
-                    await validateDevice();
+                    // ВАЛИДАЦИЯ УСТРОЙСТВА БЕЗ ДОПОЛНИТЕЛЬНОГО ЗАПРОСА:
+                    // Update status display с данными из того же запроса
+                    document.getElementById('serialValue').textContent = result.serial || 'Error';
+                    document.getElementById('testsValue').textContent = result.tests_ok;
+                    document.getElementById('calibValue').textContent = result.calibration_ok;
+                    document.getElementById('statusValue').textContent = result.status;
                     
-                    showStatus('✅ Устройство успешно подключено', 'success');
+                    // Update icons
+                    const testsOk = result.tests_ok === 1;
+                    const calibOk = result.calibration_ok === 1;
+                    const progTimeOk = result.prog_time > 0;
+                    const calibTimeOk = result.calib_time > 0;
+                    
+                    document.getElementById('serialIcon').textContent = result.serial ? '✅' : '❌';
+                    document.getElementById('testsIcon').textContent = testsOk ? '✅' : '❌';
+                    document.getElementById('calibIcon').textContent = calibOk ? '✅' : '❌';
+                    
+                    // Determine device readiness based on validation mode
+                    let isReady = false;
+                    if (deviceValidationEnabled) {
+                        isReady = testsOk && calibOk && progTimeOk && calibTimeOk;
+                    } else {
+                        isReady = testsOk; // Test mode - minimal validation
+                    }
+                    
+                    document.getElementById('statusIcon').textContent = isReady ? '✅' : '❌';
+                    
+                    if (isReady) {
+                        deviceReady = true;
+                        updateStepState('step2', 'completed');
+                        document.querySelector('#step2 .step-description').textContent = 'Устройство верифицировано и готово';
+                        
+                        // Enable step 3
+                        document.getElementById('printBtn').disabled = false;
+                        updateStepState('step3', 'active');
+                        updateProgress(3);
+                        updatePrintButtonText();
+                        
+                        showStatus('✅ Устройство прошло проверку и готово к печати', 'success');
+                    } else {
+                        deviceReady = false;
+                        updateStepState('step2', 'pending');
+                        updateProgress(2);
+                        
+                        let errorMsg = 'Устройство не готово: ';
+                        if (!testsOk) errorMsg += 'Tests не пройдены. ';
+                        if (deviceValidationEnabled) {
+                            if (!calibOk) errorMsg += 'Калибровка не выполнена. ';
+                            if (!progTimeOk) errorMsg += 'Программирование не выполнено. ';
+                            if (!calibTimeOk) errorMsg += 'Время калибровки не установлено. ';
+                        }
+                        
+                        showStatus('❌ ' + errorMsg, 'error');
+                    }
+                    
                 } else {
                     updateStepState('step1', 'pending');
                     updateProgress(0);
@@ -874,11 +925,12 @@
                 showStatus('❌ Ошибка соединения с сервером', 'error');
             }
         }
-
+       
         async function validateDevice() {
             try {
                 const response = await fetch('/device_status');
                 const result = await response.json();
+                
                 
                 if (result.success) {
                     // Update status display

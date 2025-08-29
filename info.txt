@@ -1,0 +1,2 @@
+Доп пакет для qr кодов
+https://www.microsoft.com/en-us/download/details.aspx?id=40784

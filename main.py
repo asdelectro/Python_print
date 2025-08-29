@@ -95,11 +95,16 @@ def device_status():
     """Get device status"""
     try:
         device = rc_client.get_single_device()
+         # 
+        print(f"DEBUG: Raw device data: {device}")
+        print(f"DEBUG: db_info: {device.get('db_info', {})}")
+        print(f"DEBUG: tests_ok value: {device['db_info'].get('tests_ok')} (type: {type(device['db_info'].get('tests_ok'))})")
         
         handle = device["handle"]
         mcu_id = device["mcu_id"]
         serial = device["serial"]
         db_info = device["db_info"]
+      
         
         mcu_str = ' '.join(f'{b:02X}' for b in mcu_id) if mcu_id else 'Error'
         
@@ -334,4 +339,5 @@ if __name__ == '__main__':
     print(f"🖨️ Физическая печать: {'ВКЛЮЧЕНА' if config.PHYSICAL_PRINT_ENABLED else 'ОТКЛЮЧЕНА (СИМУЛЯЦИЯ)'}")
     print("⏹️  Для остановки нажмите Ctrl+C")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+   # app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=False)

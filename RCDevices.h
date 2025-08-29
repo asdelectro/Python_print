@@ -1,7 +1,11 @@
 #ifndef __RCDEVICES_H__
 #define __RCDEVICES_H__
 
-#define RCAPI __declspec(dllimport) __stdcall
+#ifdef _USRDLL
+  #define RCAPI __declspec(dllexport) __stdcall
+#else
+  #define RCAPI __declspec(dllimport) __stdcall
+#endif
 
 #ifndef __RCDEVICES__
 typedef unsigned char uint8;
