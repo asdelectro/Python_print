@@ -1,0 +1,42 @@
+dd# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+build/
+dist/
+*.manifest
+*.msi
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+*.tmp
+*.temp
+temp_*.pdf
+web_label.pdf
+
+# Базы данных и конфиги
+*.db
+*.sqlite
+*.sqlite3
+config.ini
+.env

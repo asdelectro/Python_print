@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Принтер этикеток - RCDevices</title>
     <style>
+        /* Все стили остаются точно такими же */
         * {
             margin: 0;
             padding: 0;
@@ -859,7 +860,6 @@
                     // Show device status box
                     document.getElementById('deviceStatusBox').style.display = 'block';
                     
-                    // ВАЛИДАЦИЯ УСТРОЙСТВА БЕЗ ДОПОЛНИТЕЛЬНОГО ЗАПРОСА:
                     // Update status display с данными из того же запроса
                     document.getElementById('serialValue').textContent = result.serial || 'Error';
                     document.getElementById('testsValue').textContent = result.tests_ok;
@@ -876,12 +876,14 @@
                     document.getElementById('testsIcon').textContent = testsOk ? '✅' : '❌';
                     document.getElementById('calibIcon').textContent = calibOk ? '✅' : '❌';
                     
-                    // Determine device readiness based on validation mode
+                    // ИСПРАВЛЕННАЯ ЛОГИКА: Determine device readiness based on validation mode
                     let isReady = false;
                     if (deviceValidationEnabled) {
+                        // Полная проверка в обычном режиме
                         isReady = testsOk && calibOk && progTimeOk && calibTimeOk;
                     } else {
-                        isReady = testsOk; // Test mode - minimal validation
+                        // В тестовом режиме достаточно наличия серийного номера
+                        isReady = result.serial && result.serial !== 'Error';
                     }
                     
                     document.getElementById('statusIcon').textContent = isReady ? '✅' : '❌';
@@ -897,13 +899,17 @@
                         updateProgress(3);
                         updatePrintButtonText();
                         
-                        showStatus('✅ Устройство прошло проверку и готово к печати', 'success');
+                        const modeText = deviceValidationEnabled ? '' : ' (тестовый режим)';
+                        showStatus(`✅ Устройство прошло проверку и готово к печати${modeText}`, 'success');
                     } else {
                         deviceReady = false;
                         updateStepState('step2', 'pending');
                         updateProgress(2);
                         
                         let errorMsg = 'Устройство не готово: ';
+                        if (!result.serial || result.serial === 'Error') {
+                            errorMsg += 'Серийный номер не получен. ';
+                        }
                         if (!testsOk) errorMsg += 'Tests не пройдены. ';
                         if (deviceValidationEnabled) {
                             if (!calibOk) errorMsg += 'Калибровка не выполнена. ';
@@ -922,74 +928,6 @@
             } catch (error) {
                 updateStepState('step1', 'pending');
                 updateProgress(0);
-                showStatus('❌ Ошибка соединения с сервером', 'error');
-            }
-        }
-       
-        async function validateDevice() {
-            try {
-                const response = await fetch('/device_status');
-                const result = await response.json();
-                
-                
-                if (result.success) {
-                    // Update status display
-                    document.getElementById('serialValue').textContent = result.serial || 'Error';
-                    document.getElementById('testsValue').textContent = result.tests_ok;
-                    document.getElementById('calibValue').textContent = result.calibration_ok;
-                    document.getElementById('statusValue').textContent = result.status;
-                    
-                    // Update icons
-                    const testsOk = result.tests_ok === 1;
-                    const calibOk = result.calibration_ok === 1;
-                    const progTimeOk = result.prog_time > 0;
-                    const calibTimeOk = result.calib_time > 0;
-                    
-                    document.getElementById('serialIcon').textContent = result.serial ? '✅' : '❌';
-                    document.getElementById('testsIcon').textContent = testsOk ? '✅' : '❌';
-                    document.getElementById('calibIcon').textContent = calibOk ? '✅' : '❌';
-                    
-                    // Determine device readiness based on validation mode
-                    let isReady = false;
-                    if (deviceValidationEnabled) {
-                        isReady = testsOk && calibOk && progTimeOk && calibTimeOk;
-                    } else {
-                        isReady = testsOk; // Test mode - minimal validation
-                    }
-                    
-                    document.getElementById('statusIcon').textContent = isReady ? '✅' : '❌';
-                    
-                    if (isReady) {
-                        deviceReady = true;
-                        updateStepState('step2', 'completed');
-                        document.querySelector('#step2 .step-description').textContent = 'Устройство верифицировано и готово';
-                        
-                        // Enable step 3
-                        document.getElementById('printBtn').disabled = false;
-                        updateStepState('step3', 'active');
-                        updateProgress(3);
-                        updatePrintButtonText();
-                        
-                        showStatus('✅ Устройство прошло проверку и готово к печати', 'success');
-                    } else {
-                        deviceReady = false;
-                        updateStepState('step2', 'pending');
-                        updateProgress(2);
-                        
-                        let errorMsg = 'Устройство не готово: ';
-                        if (!testsOk) errorMsg += 'Tests не пройдены. ';
-                        if (deviceValidationEnabled) {
-                            if (!calibOk) errorMsg += 'Калибровка не выполнена. ';
-                            if (!progTimeOk) errorMsg += 'Программирование не выполнено. ';
-                            if (!calibTimeOk) errorMsg += 'Время калибровки не установлено. ';
-                        }
-                        
-                        showStatus('❌ ' + errorMsg, 'error');
-                    }
-                } else {
-                    showStatus('❌ Ошибка получения статуса устройства: ' + result.message, 'error');
-                }
-            } catch (error) {
                 showStatus('❌ Ошибка соединения с сервером', 'error');
             }
         }
@@ -1128,28 +1066,6 @@
             } catch (error) {
                 showStatus('❌ Ошибка проверки статуса сканирования', 'error');
             }
-        }
-
-        function completeScan() {
-            updateStepState('step4', 'completed');
-            document.querySelector('#step4 .step-description').textContent = 'Процесс завершен успешно';
-            
-            // Hide scan section
-            document.getElementById('scanContent').style.display = 'none';
-            stopScanChecking();
-            
-            // Update progress to complete
-            updateProgress(4);
-            
-            // Refresh scanned items
-            loadScannedItems();
-            
-            showStatus('✅ Процесс обработки устройства завершен успешно!', 'success');
-            
-            // Auto reset after 5 seconds
-            setTimeout(() => {
-                resetProcess();
-            }, 5000);
         }
 
         function resetProcess() {
