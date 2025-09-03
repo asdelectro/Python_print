@@ -139,9 +139,8 @@ def print_label():
         success = printer.create_and_print_label(
             serial_number=serial_number,
             template_pdf='templ_103.pdf',
-            add_qr=True,
-            print_after_create=config.PHYSICAL_PRINT_ENABLED
-        )
+            add_datamatrix=True,  
+            print_after_create=config.PHYSICAL_PRINT_ENABLED)
         
         if success:
             message = f'Этикетка "{serial_number}" '

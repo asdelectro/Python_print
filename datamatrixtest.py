@@ -1,6 +1,8 @@
-# Simplified label printer with Data Matrix instead of QR
+# Упрощенная версия print_labels.py - с Data Matrix вместо QR
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
+from reportlab.graphics import renderPDF
+from reportlab.graphics.shapes import Drawing
 from PyPDF2 import PdfReader, PdfWriter
 import io
 import win32print
@@ -11,13 +13,14 @@ import logging
 import os
 import psycopg2
 import socket
+from datetime import datetime
 
-# Data Matrix import
+# Data Matrix импорт
 try:
     from pylibdmtx import pylibdmtx
     DATAMATRIX_AVAILABLE = True
 except ImportError:
-    print("Warning: Data Matrix not available")
+    print("Warning: Data Matrix недоступен")
     DATAMATRIX_AVAILABLE = False
 
 class LabelPrinter:
@@ -30,20 +33,20 @@ class LabelPrinter:
         self.label_y_mm = 13.3
         self.label_font_size = 6
         
-        # Data Matrix settings
+        # Data Matrix settings (заменили QR)
         self.dm_x_mm = 19
         self.dm_y_mm = 2
         self.dm_size_mm = 5
-        self.dm_pixels = 300  # High resolution for printing
+        self.dm_pixels = 300  # Высокое разрешение для печати
         
         # Print settings
-        self.print_scale = 1.15
+        self.print_scale = 1.0
         self.printer_name = "TSC TE300"
         self.print_dpi = 300
         
         # Print margins
-        self.print_offset_x = 5
-        self.print_offset_y = 10
+        self.print_offset_x = 0
+        self.print_offset_y = -20
         self.print_width = None
         self.print_height = None
         
@@ -59,11 +62,11 @@ class LabelPrinter:
         # Get computer name for station_id
         self.station_id = socket.gethostname()
         
-        # Logging settings
+        # Logging and file settings
         self.enable_logging = enable_logging
         self.temp_filename = temp_filename
         
-        # Configure logging
+        # Configure simple logging
         if self.enable_logging:
             logging.basicConfig(
                 level=logging.INFO,
@@ -80,22 +83,22 @@ class LabelPrinter:
             self.logger = NullLogger()
     
     def get_db_connection(self):
-        """Connect to PostgreSQL database"""
+        """Подключение к PostgreSQL"""
         try:
             conn = psycopg2.connect(**self.db_config)
             return conn
         except Exception as e:
-            self.logger.error(f"Database connection error: {e}")
+            self.logger.error(f"Ошибка подключения к БД: {e}")
             return None
     
     def save_device_to_db(self, barcode: str):
-        """Save device to database with preready status"""
+        """Сохранение устройства в БД со статусом preready"""
         try:
-            self.logger.info(f"Saving to database: {barcode}")
+            self.logger.info(f"Сохранение в БД: {barcode}")
             
             conn = self.get_db_connection()
             if not conn:
-                raise Exception("Failed to connect to database")
+                raise Exception("Не удалось подключиться к базе данных")
             
             try:
                 with conn.cursor() as cursor:
@@ -117,67 +120,67 @@ class LabelPrinter:
                     conn.commit()
                     
                     if result:
-                        self.logger.info(f"Successfully saved to database: {barcode}")
+                        self.logger.info(f"Успешно сохранено в БД: {barcode}")
                         return True
                     else:
-                        raise Exception("No result from database")
+                        raise Exception("Не получен результат от БД")
                         
             except Exception as db_error:
                 conn.rollback()
-                self.logger.error(f"SQL error: {db_error}")
+                self.logger.error(f"Ошибка SQL: {db_error}")
                 raise
             finally:
                 conn.close()
                 
         except Exception as e:
-            self.logger.error(f"Database save error: {e}")
+            self.logger.error(f"Ошибка сохранения в БД: {e}")
             return False
     
     def create_datamatrix_image(self, data: str, size_pixels: int = None):
-        """Create Data Matrix image"""
+        """Создание Data Matrix изображения"""
         if not DATAMATRIX_AVAILABLE:
-            self.logger.warning("Data Matrix not available")
+            self.logger.warning("Data Matrix недоступен")
             return None
         
         if size_pixels is None:
             size_pixels = self.dm_pixels
             
         try:
-            # Generate Data Matrix
+            # Генерируем Data Matrix
             encoded = pylibdmtx.encode(data.encode('utf-8'))
             
             if encoded:
-                # Convert to image
+                # Конвертируем в изображение
                 dm_img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
                 
-                # Scale to required size
+                # Масштабируем до нужного размера
                 dm_img = dm_img.resize((size_pixels, size_pixels), Image.NEAREST)
                 
                 return dm_img
             else:
-                print("Error creating Data Matrix")
+                print("Ошибка создания Data Matrix")
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Data Matrix creation error: {e}")
+            self.logger.error(f"Ошибка создания Data Matrix: {e}")
             return None
     
     def add_datamatrix_to_canvas(self, canvas_obj, data: str, x_mm: float, y_mm: float, size_mm: float):
-        """Add Data Matrix to canvas"""
+        """Добавление Data Matrix на canvas"""
         try:
-            # Create Data Matrix image
-            pixels_per_mm = self.print_dpi / 25.4  # Convert DPI to pixels per mm
+            # Создаем изображение Data Matrix
+            pixels_per_mm = self.print_dpi / 25.4  # Конвертация DPI в пиксели на мм
             size_pixels = int(size_mm * pixels_per_mm)
             
             dm_img = self.create_datamatrix_image(data, size_pixels)
             if dm_img is None:
                 return False
             
-            # Save temporary image
+            # Сохраняем временное изображение
             temp_dm_path = "temp_datamatrix.png"
             dm_img.save(temp_dm_path)
             
-            # Add to canvas
+            # Добавляем на canvas
             canvas_obj.drawImage(
                 temp_dm_path,
                 x_mm * mm,
@@ -187,57 +190,57 @@ class LabelPrinter:
                 preserveAspectRatio=True
             )
             
-            # Remove temporary file
+            # Удаляем временный файл
             try:
                 os.remove(temp_dm_path)
             except:
                 pass
             
-            self.logger.info(f"Data Matrix added at position ({x_mm}, {y_mm})")
+            self.logger.info(f"Data Matrix добавлен на позицию ({x_mm}, {y_mm})")
             return True
             
         except Exception as e:
-            self.logger.error(f"Error adding Data Matrix: {e}")
+            self.logger.error(f"Ошибка добавления Data Matrix: {e}")
             return False
     
     def create_label(self, serial_number: str, template_pdf: str, output_pdf: str = None, add_datamatrix=True):
-        """Create label with serial number and Data Matrix"""
+        """Создание этикетки с серийным номером и Data Matrix"""
         if output_pdf is None:
             output_pdf = self.temp_filename
             
-        self.logger.info(f"Creating label: {serial_number}")
+        self.logger.info(f"Создание этикетки: {serial_number}")
         
-        # Remove existing file
+        # Удаляем существующий файл
         if os.path.exists(output_pdf):
             try:
                 os.remove(output_pdf)
             except Exception as e:
-                self.logger.error(f"Could not delete file {output_pdf}: {e}")
+                self.logger.error(f"Не удалось удалить файл {output_pdf}: {e}")
         
-        # Template dimensions
-        template_width = 46 * mm
-        template_height = 25 * mm
+        # Размеры шаблона - 2.00" x 1.00" (50,8 mm x 25,4 mm)
+        template_width = 50.8 * mm
+        template_height = 25.4 * mm
         
-        # Create PDF in memory
+        # Создаем PDF в памяти
         packet = io.BytesIO()
         c = canvas.Canvas(packet, pagesize=(template_width, template_height))
         
-        # Add serial number
+        # Добавляем серийный номер
         c.setFont("Helvetica-Bold", self.label_font_size)
         c.setFillColorRGB(0, 0, 0)
         c.drawString(self.label_x_mm * mm, self.label_y_mm * mm, serial_number)
         
-        # Add Data Matrix
+        # Добавляем Data Matrix
         if add_datamatrix:
             if self.add_datamatrix_to_canvas(c, serial_number, self.dm_x_mm, self.dm_y_mm, self.dm_size_mm):
-                self.logger.info("Data Matrix added to label")
+                self.logger.info("Data Matrix добавлен на этикетку")
             else:
-                self.logger.warning("Data Matrix not created")
+                self.logger.warning("Data Matrix не создан")
         
         c.save()
         packet.seek(0)
         
-        # Merge with template
+        # Объединяем с шаблоном
         try:
             new_pdf = PdfReader(packet)
             template = PdfReader(template_pdf)
@@ -249,14 +252,14 @@ class LabelPrinter:
             with open(output_pdf, "wb") as f:
                 writer.write(f)
             
-            self.logger.info(f"Label created: {output_pdf}")
+            self.logger.info(f"Этикетка создана: {output_pdf}")
             return True
         except Exception as e:
-            self.logger.error(f"Label creation error: {e}")
+            self.logger.error(f"Ошибка создания этикетки: {e}")
             return False
     
     def pdf_to_image(self, pdf_path: str):
-        """Convert PDF to image"""
+        """Конвертация PDF в изображение"""
         try:
             pdf_document = fitz.open(pdf_path)
             page = pdf_document[0]
@@ -267,11 +270,11 @@ class LabelPrinter:
             pdf_document.close()
             return image
         except Exception as e:
-            self.logger.error(f"PDF conversion error: {e}")
+            self.logger.error(f"Ошибка конвертации PDF: {e}")
             return None
     
     def print_label(self, pdf_path: str = None, printer_name: str = None, scale: float = None):
-        """Print label"""
+        """Печать этикетки"""
         if pdf_path is None:
             pdf_path = self.temp_filename
         if printer_name is None:
@@ -279,22 +282,22 @@ class LabelPrinter:
         if scale is None:
             scale = self.print_scale
         
-        self.logger.info(f"Printing: {pdf_path}")
+        self.logger.info(f"Печать: {pdf_path}")
         
         try:
-            # Convert to image
+            # Конвертируем в изображение
             image = self.pdf_to_image(pdf_path)
             if image is None:
                 return False
             
-            # Scale image
+            # Масштабирование
             if scale != 1.0:
                 original_width, original_height = image.size
                 new_width = int(original_width * scale)
                 new_height = int(original_height * scale)
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
             
-            # Print
+            # Печать
             hdc = win32ui.CreateDC()
             hdc.CreatePrinterDC(printer_name)
             hdc.StartDoc("Label Print")
@@ -311,61 +314,107 @@ class LabelPrinter:
             hdc.EndDoc()
             hdc.DeleteDC()
             
-            self.logger.info("Printing completed")
+            self.logger.info("Печать завершена")
             return True
         except Exception as e:
-            self.logger.error(f"Printing error: {e}")
+            self.logger.error(f"Ошибка печати: {e}")
             return False
     
     def create_and_print_label(self, serial_number: str, template_pdf: str, 
                              output_pdf: str = None, add_datamatrix=True,
                              print_after_create=True, printer_name: str = None, 
                              scale: float = None):
-        """Create and print label with Data Matrix and save to database"""
+        """Создание и печать этикетки с Data Matrix и записью в БД"""
         if output_pdf is None:
             output_pdf = self.temp_filename
         
-        self.logger.info(f"Processing label: {serial_number}")
+        self.logger.info(f"Обработка этикетки: {serial_number}")
         
         try:
-            # Save to database
+            # Сохраняем в БД
             if not self.save_device_to_db(serial_number):
-                raise Exception("Database save error")
+                raise Exception("Ошибка записи в базу данных")
             
-            # Create label
+            # Создаем этикетку
             if not self.create_label(serial_number, template_pdf, output_pdf, add_datamatrix):
-                raise Exception("Label creation error")
+                raise Exception("Ошибка создания этикетки")
             
-            # Print if needed
+            # Печатаем если нужно
             if print_after_create:
                 if self.print_label(output_pdf, printer_name, scale):
-                    self.logger.info(f"Label {serial_number} printed and saved to database")
+                    self.logger.info(f"Этикетка {serial_number} напечатана и записана в БД")
                     return True
                 else:
-                    self.logger.error(f"Printing error for {serial_number}")
+                    self.logger.error(f"Ошибка печати {serial_number}")
                     return False
             else:
-                self.logger.info(f"Label {serial_number} created and saved to database")
+                self.logger.info(f"Этикетка {serial_number} создана и записана в БД")
                 return True
                 
         except Exception as e:
-            self.logger.error(f"Processing error for {serial_number}: {e}")
+            self.logger.error(f"Ошибка обработки {serial_number}: {e}")
+            return False
+    
+    def get_available_printers(self):
+        """Получение списка доступных принтеров"""
+        try:
+            printers = []
+            for printer in win32print.EnumPrinters(2):
+                printers.append(printer[2])
+            return printers
+        except Exception as e:
+            self.logger.error(f"Ошибка получения принтеров: {e}")
+            return []
+    
+    def test_db_connection(self):
+        """Тест подключения к БД"""
+        try:
+            conn = self.get_db_connection()
+            if conn:
+                conn.close()
+                self.logger.info("Подключение к БД успешно")
+                return True
+            else:
+                self.logger.error("Ошибка подключения к БД")
+                return False
+        except Exception as e:
+            self.logger.error(f"Тест БД провален: {e}")
+            return False
+    
+    def test_datamatrix(self, test_data: str = "TEST-123"):
+        """Тест создания Data Matrix"""
+        try:
+            img = self.create_datamatrix_image(test_data, 200)
+            if img:
+                img.save("test_datamatrix.png")
+                self.logger.info(f"Тест Data Matrix успешен: test_datamatrix.png")
+                return True
+            else:
+                self.logger.error("Ошибка создания тестового Data Matrix")
+                return False
+        except Exception as e:
+            self.logger.error(f"Ошибка тестирования Data Matrix: {e}")
             return False
 
-# Simple test
+# Простой тест
 if __name__ == "__main__":
     printer = LabelPrinter(enable_logging=True)
     
-    # Test Data Matrix
-    print("Testing Data Matrix...")
+    # Тест Data Matrix
+    print("Тестирование Data Matrix...")
+    if printer.test_datamatrix("RC103-12323232"):
+        print("Data Matrix работает")
     
-    # Create and print label (test without actual printing)
+    if printer.test_db_connection():
+        print("База данных доступна")
+    
+    # Создать и напечатать этикетку (тестирование без печати)
     result = printer.create_and_print_label(
         "RC103-12323232", 
         "templ_103.pdf",
-        output_pdf="web_label.pdf",
-        print_after_create=True,  # Don't print, just create PDF
+        output_pdf="web_label.pdf",  # Сохранить как web_label.pdf
+        print_after_create=True,    # Не печатать, только создать PDF
         add_datamatrix=True
     )
     
-    print(f"Result: {result}")
+    print(f"Результат: {result}")
