@@ -12,7 +12,7 @@ import os
 import psycopg2
 import socket
 import re
-import win32api
+import subprocess
 
 # Data Matrix import
 try:
@@ -503,64 +503,56 @@ class LabelPrinter:
             self.logger.error(f"PDF conversion error: {e}")
             return None
 
-    def print_pdf_directly(self, pdf_path: str, printer_name: str = None):
-        """Print PDF directly without conversion"""
-        if printer_name is None:
-            printer_name = self.printer_name
-
-        try:
-            win32api.ShellExecute(0, "print", pdf_path, f'/d:"{printer_name}"', ".", 0)
-            self.logger.info("PDF printed directly")
-            return True
-        except Exception as e:
-            self.logger.error(f"Direct PDF printing error: {e}")
-            return False
-
     def print_label(
         self, pdf_path: str = None, printer_name: str = None, scale: float = None
     ):
-        """Print label"""
+        """Print PDF using direct subprocess call with process termination"""
         if pdf_path is None:
             pdf_path = self.temp_filename
         if printer_name is None:
             printer_name = self.printer_name
-        if scale is None:
-            scale = self.print_scale
-
-        self.logger.info(f"Printing: {pdf_path}")
 
         try:
-            # Convert to image
-            image = self.pdf_to_image(pdf_path)
-            if image is None:
-                return False
+            full_pdf_path = os.path.abspath(pdf_path)
+            acrobat_path = r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
 
-            # Scale image
-            if scale != 1.0:
-                original_width, original_height = image.size
-                new_width = int(original_width * scale)
-                new_height = int(original_height * scale)
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            # Direct call without PowerShell
+            cmd = [acrobat_path, "/t", full_pdf_path, printer_name]
 
-            # Print
-            hdc = win32ui.CreateDC()
-            hdc.CreatePrinterDC(printer_name)
-            hdc.StartDoc("Label Print")
-            hdc.StartPage()
+            self.logger.info(f"Running command: {' '.join(cmd)}")
 
-            dib = ImageWin.Dib(image)
-            width = self.print_width or image.size[0]
-            height = self.print_height or image.size[1]
-            x, y = self.print_offset_x, self.print_offset_y
+            # Use Popen to control the process
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            dib.draw(hdc.GetHandleOutput(), (x, y, x + width, y + height))
+            # Wait for printing to complete (give it time to send to printer)
+            import time
 
-            hdc.EndPage()
-            hdc.EndDoc()
-            hdc.DeleteDC()
+            time.sleep(5)  # Wait 5 seconds for printing to start
 
-            self.logger.info("Printing completed")
+            # Force terminate the Acrobat process
+            try:
+                if proc.poll() is None:  # Process still running
+                    self.logger.info("Terminating Acrobat process...")
+                    proc.terminate()
+
+                    # Wait a bit for graceful termination
+                    time.sleep(1)
+
+                    # If still running, force kill
+                    if proc.poll() is None:
+                        self.logger.info("Force killing Acrobat process...")
+                        proc.kill()
+
+                    proc.wait()  # Wait for process to fully terminate
+
+                self.logger.info(f"Acrobat process ended with code: {proc.returncode}")
+
+            except Exception as term_error:
+                self.logger.warning(f"Error terminating process: {term_error}")
+
+            self.logger.info("Print command completed and Acrobat closed")
             return True
+
         except Exception as e:
             self.logger.error(f"Printing error: {e}")
             return False
@@ -594,7 +586,7 @@ class LabelPrinter:
 
             # Print if needed
             if print_after_create:
-                if self.print_label(output_pdf, printer_name, scale):
+                if self.print_label(output_pdf, printer_name, scale):  # print_label
                     self.logger.info(
                         f"Label {serial_number} printed and saved to database"
                     )
@@ -620,7 +612,7 @@ if __name__ == "__main__":
 
     # Create and print label (test without actual printing)
     result = printer.create_and_print_label(
-        "RC-103G-000000",
+        "RC-110-000000",
         "template51x25.pdf",
         output_pdf="web_label.pdf",
         print_after_create=True,  # Don't print, just create PDF
