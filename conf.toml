@@ -1,0 +1,71 @@
+# Label Printer Configuration
+
+[general]
+enable_logging = true
+temp_filename = "temp_label.pdf"
+
+[database]
+host = "192.168.88.132"
+port = 5432
+name = "production_db"
+user = "emqx_user"
+password = "zxtbd"
+
+[label_positions]
+# Label Ser.No
+serial_number_prefix_x_mm=33.55
+serial_number_prefix_y_mm=19
+
+# Serial number label
+serialLabel_x_mm = 33.55
+serialLabel_y_mm = 16.85
+serialLabel_font_size = 6
+
+# Type label
+typeLabel_x_mm = 2
+typeLabel_y_mm = 19
+typeLabel_font_size = 4
+
+# FCC label
+fccLabel_x_mm = 25
+fccLabel_y_mm = 2
+
+# Power parameters labels
+powerLabels_font_size = 4
+
+# Power labels positions
+powerULabel_x_mm = 23.5
+powerULabel_y_mm = 13.1
+
+powerALabel_x_mm = 34.5
+powerALabel_y_mm = 13.1
+
+powerWLabel_x_mm = 44.4
+powerWLabel_y_mm = 13.1
+
+powerILabel_x_mm = 23.5
+powerILabel_y_mm = 11.2
+
+powermAhLabel_x_mm = 33.2
+powermAhLabel_y_mm = 11.2
+
+powerWhLabel_x_mm = 44.1
+powerWhLabel_y_mm = 11.2
+
+[datamatrix]
+dm_x_mm = 17
+dm_y_mm = 4.1
+dm_size_mm = 5
+dm_pixels = 300
+
+[printing]
+print_scale = 0.5
+printer_name = "TSC TE300"
+print_dpi = 600
+print_offset_x = 1
+print_offset_y = 5
+print_width = 0
+print_height = 0
+
+[acrobat]
+path = "C:/Program Files/Adobe/Acrobat DC/Acrobat/Acrobat.exe"

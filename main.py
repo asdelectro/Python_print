@@ -6,6 +6,7 @@ from hardware import RCDevicesClient
 import requests
 import os
 from datetime import datetime
+import toml
 
 app = Flask(__name__)
 
@@ -25,7 +26,7 @@ class Config:
 config = Config()
 
 # Create instances
-printer = LabelPrinter(enable_logging=False, temp_filename="web_label.pdf")
+printer = LabelPrinter()
 rc_client = RCDevicesClient()
 
 

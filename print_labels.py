@@ -13,6 +13,7 @@ import psycopg2
 import socket
 import re
 import subprocess
+import toml
 
 # Data Matrix import
 try:
@@ -25,84 +26,85 @@ except ImportError:
 
 
 class LabelPrinter:
-    def __init__(
-        self,
-        enable_logging=True,
-        temp_filename="temp_label.pdf",
-        db_host="192.168.88.132",
-        db_port=5432,
-        db_name="production_db",
-        db_user="emqx_user",
-        db_password="zxtbd",
-    ):
+    def __init__(self, config_file="conf.toml"):
+        """Initialize LabelPrinter with settings from TOML config file"""
+
+        # Load configuration
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = toml.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Configuration file {config_file} not found. Please create the config file."
+            )
+        except Exception as e:
+            raise Exception(f"Error loading configuration: {e}")
+
+        # General settings
+        general = config["general"]
+        self.enable_logging = general["enable_logging"]
+        self.temp_filename = general["temp_filename"]
 
         # Label position settings
-        self.serialLabel_x_mm = 33.55
-        self.serialLabel_y_mm = 16.85
-        self.serialLabel_font_size = 6
+        labels = config["label_positions"]
 
-        # Type
-        self.typeLabel_x_mm = 2
-        self.typeLabel_y_mm = 19
-        self.typeLabel_font_size = 4
-
-        # FCC
-        self.fccLabel_x_mm = 25
-        self.fccLabel_y_mm = 2
-
-        # power parametrs labels
-        self.powerLabels_font_size = 4
-
-        self.powerULabel_x_mm = 23.5
-        self.powerULabel_y_mm = 13.1
-
-        self.powerALabel_x_mm = 34.5
-        self.powerALabel_y_mm = 13.1
-
-        self.powerWLabel_x_mm = 44.4
-        self.powerWLabel_y_mm = 13.1
-
-        self.powerILabel_x_mm = 23.5
-        self.powerILabel_y_mm = 11.2
-
-        self.powermAhLabel_x_mm = 33.2
-        self.powermAhLabel_y_mm = 11.2
-
-        self.powerWhLabel_x_mm = 44.1
-        self.powerWhLabel_y_mm = 11.2
+        self.serial_number_prefix_x_mm = labels["serial_number_prefix_x_mm"]
+        self.serial_number_prefix_y_mm = labels["serial_number_prefix_y_mm"]
+        self.serialLabel_x_mm = labels["serialLabel_x_mm"]
+        self.serialLabel_y_mm = labels["serialLabel_y_mm"]
+        self.serialLabel_font_size = labels["serialLabel_font_size"]
+        self.typeLabel_x_mm = labels["typeLabel_x_mm"]
+        self.typeLabel_y_mm = labels["typeLabel_y_mm"]
+        self.typeLabel_font_size = labels["typeLabel_font_size"]
+        self.fccLabel_x_mm = labels["fccLabel_x_mm"]
+        self.fccLabel_y_mm = labels["fccLabel_y_mm"]
+        self.powerLabels_font_size = labels["powerLabels_font_size"]
+        self.powerULabel_x_mm = labels["powerULabel_x_mm"]
+        self.powerULabel_y_mm = labels["powerULabel_y_mm"]
+        self.powerALabel_x_mm = labels["powerALabel_x_mm"]
+        self.powerALabel_y_mm = labels["powerALabel_y_mm"]
+        self.powerWLabel_x_mm = labels["powerWLabel_x_mm"]
+        self.powerWLabel_y_mm = labels["powerWLabel_y_mm"]
+        self.powerILabel_x_mm = labels["powerILabel_x_mm"]
+        self.powerILabel_y_mm = labels["powerILabel_y_mm"]
+        self.powermAhLabel_x_mm = labels["powermAhLabel_x_mm"]
+        self.powermAhLabel_y_mm = labels["powermAhLabel_y_mm"]
+        self.powerWhLabel_x_mm = labels["powerWhLabel_x_mm"]
+        self.powerWhLabel_y_mm = labels["powerWhLabel_y_mm"]
 
         # Data Matrix settings
-        self.dm_x_mm = 18
-        self.dm_y_mm = 4.1
-        self.dm_size_mm = 5
-        self.dm_pixels = 300  # High resolution for printing
+        dm = config["datamatrix"]
+        self.dm_x_mm = dm["dm_x_mm"]
+        self.dm_y_mm = dm["dm_y_mm"]
+        self.dm_size_mm = dm["dm_size_mm"]
+        self.dm_pixels = dm["dm_pixels"]
 
         # Print settings
-        self.print_scale = 0.5
-        self.printer_name = "TSC TE300"
-        self.print_dpi = 600
+        printing = config["printing"]
+        self.print_scale = printing["print_scale"]
+        self.printer_name = printing["printer_name"]
+        self.print_dpi = printing["print_dpi"]
+        self.print_offset_x = printing["print_offset_x"]
+        self.print_offset_y = printing["print_offset_y"]
+        self.print_width = printing["print_width"]
+        self.print_height = printing["print_height"]
 
-        # Print margins
-        self.print_offset_x = 1
-        self.print_offset_y = 5
-        self.print_width = None
-        self.print_height = None
+        # Path to printer executable (Adobe Acrobat)
+        acrobat = config["acrobat"]
+        self.acrobat_path = acrobat["path"]
 
         # Database settings
+        db = config["database"]
         self.db_config = {
-            "host": db_host,
-            "port": db_port,
-            "database": db_name,
-            "user": db_user,
-            "password": db_password,
+            "host": db["host"],
+            "port": db["port"],
+            "database": db["name"],
+            "user": db["user"],
+            "password": db["password"],
         }
 
         # Get computer name for station_id
         self.station_id = socket.gethostname()
-
-        # Logging settings
-        self.enable_logging = enable_logging
-        self.temp_filename = temp_filename
 
         # Configure logging
         if self.enable_logging:
@@ -110,7 +112,9 @@ class LabelPrinter:
                 level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
             )
             self.logger = logging.getLogger(__name__)
-            self.logger.info(f"LabelPrinter initialized (Station: {self.station_id})")
+            self.logger.info(
+                f"LabelPrinter initialized from {config_file} (Station: {self.station_id})"
+            )
         else:
 
             class NullLogger:
@@ -263,6 +267,15 @@ class LabelPrinter:
             self.serialLabel_x_mm * mm, self.serialLabel_y_mm * mm, serial_number
         )
 
+        # Add serial perfix number
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(
+            self.serial_number_prefix_x_mm * mm,
+            self.serial_number_prefix_y_mm * mm,
+            "Ser.No.",
+        )
+
         # Add type label
         c.setFont("Helvetica-Bold", self.typeLabel_font_size)
         c.drawString(
@@ -292,6 +305,16 @@ class LabelPrinter:
         c.drawString(
             self.serialLabel_x_mm * mm, self.serialLabel_y_mm * mm, serial_number
         )
+
+        # Add serial perfix number
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(
+            self.serial_number_prefix_x_mm * mm,
+            self.serial_number_prefix_y_mm * mm,
+            "Ser.No.",
+        )
+
         # Add type label
         c.setFont("Helvetica-Bold", self.typeLabel_font_size)
         c.drawString(
@@ -321,7 +344,18 @@ class LabelPrinter:
         c.setFont("Helvetica-Bold", self.serialLabel_font_size)
         c.setFillColorRGB(0, 0, 0)
         c.drawString(
-            self.serialLabel_x_mm * mm, self.serialLabel_y_mm * mm, serial_number
+            (self.serialLabel_x_mm - 1.5) * mm,
+            self.serialLabel_y_mm * mm,
+            serial_number,
+        )
+
+        # Add serial perfix number
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(
+            (self.serial_number_prefix_x_mm - 1.5) * mm,
+            self.serial_number_prefix_y_mm * mm,
+            "Ser.No.",
         )
 
         # Add type label
@@ -356,6 +390,15 @@ class LabelPrinter:
             self.serialLabel_x_mm * mm, self.serialLabel_y_mm * mm, serial_number
         )
 
+        # Add serial perfix number
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(
+            self.serial_number_prefix_x_mm * mm,
+            self.serial_number_prefix_y_mm * mm,
+            "Ser.No.",
+        )
+
         # Add type label
         c.setFont("Helvetica-Bold", self.typeLabel_font_size)
         c.drawString(
@@ -377,7 +420,7 @@ class LabelPrinter:
             self.powermAhLabel_x_mm * mm, self.powermAhLabel_y_mm * mm, "1500 mAh"
         )
         c.drawString(
-            self.powerWhLabel_x_mm * mm, self.powerWhLabel_y_mm * mm, "5.55 Wh"
+            (self.powerWhLabel_x_mm - 0.7) * mm, self.powerWhLabel_y_mm * mm, "5.55 Wh"
         )
 
     def _validate_serial_number(self, serial_number: str) -> str:
@@ -514,7 +557,7 @@ class LabelPrinter:
 
         try:
             full_pdf_path = os.path.abspath(pdf_path)
-            acrobat_path = r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+            acrobat_path = self.acrobat_path
 
             # Direct call without PowerShell
             cmd = [acrobat_path, "/t", full_pdf_path, printer_name]
@@ -605,7 +648,7 @@ class LabelPrinter:
 
 # Simple test
 if __name__ == "__main__":
-    printer = LabelPrinter(enable_logging=True)
+    printer = LabelPrinter()
 
     # Test Data Matrix
     print("Testing Data Matrix...")

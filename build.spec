@@ -1,67 +1,79 @@
 # -*- mode: python ; coding: utf-8 -*-
-# ПРИНУДИТЕЛЬНЫЙ Spec-файл для QR модуля
+# Updated Spec file for Data Matrix label printer
 
 import os
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
-
-# Собираем ВСЕ модули ReportLab принудительно
 reportlab_hiddenimports = collect_submodules('reportlab')
 
-# Принудительно добавляем критически важные модули
-critical_modules = [
-    'reportlab.graphics.barcode.qr',
-    'reportlab.graphics.barcode.common', 
-    'reportlab.graphics.barcode',
-    'reportlab.graphics',
+critical_reportlab_modules = [
     'reportlab.pdfgen.canvas',
     'reportlab.lib.units',
     'reportlab.graphics.renderPDF',
     'reportlab.graphics.shapes',
+    'reportlab.graphics.barcode.common',
+    'reportlab.graphics.barcode',
+    'reportlab.graphics',
+]
+
+datamatrix_modules = [
+    'pylibdmtx.pylibdmtx',
+    'pylibdmtx',
 ]
 
 a = Analysis(
     ['desk_main.py'],
     pathex=[],
     binaries=[
-        ('libmysql64.dll', '.'),
-        ('RCDevices.dll', '.'),
-        ('RCDevices.lib', '.'),
+        ('RCDevices.dll', '.'),  
     ],
     datas=[
-        ('templates', 'templates'),
-        ('hardware.py', '.'),
-        ('print_labels.py', '.'),
-        ('templ_103.pdf', '.'),
-    ] + collect_data_files('reportlab'),  # Добавляем все файлы данных ReportLab
+        ('templates', 'templates'), 
+        ('static', 'static'),      
+        ('print_labels.py', '.'),  
+        ('hardware.py', '.'),       
+        ('conf.toml', '.'),         
+        ('template51x25.pdf', '.'), 
+    ] + collect_data_files('reportlab'), 
     hiddenimports=[
-        # Базовые модули
+        'flask',
+        'flask.templating',
+        'jinja2',
+        'werkzeug',
+        'requests',     
         'hardware',
         'print_labels',
-        'flask',
-        'requests', 
         'PyPDF2',
-        'fitz',
         'PIL.Image',
-        'PIL.ImageWin',
+        'PIL.ImageWin',  
         'psycopg2',
+        'psycopg2._psycopg',
+        'psycopg2.extensions',
         'win32print',
         'win32ui',
-        'webview',
-        'webview.platforms.cef',
-        'webview.platforms.winforms',
         'pythoncom',
         'pywintypes',
-    ] + reportlab_hiddenimports + critical_modules,  # Объединяем все списки
+        'toml',
+        'pylibdmtx',
+        'pylibdmtx.pylibdmtx',
+        'socket',
+        'datetime',
+        'logging',
+        'subprocess',
+        'ctypes',
+        'platform',
+        
+    ] + reportlab_hiddenimports + critical_reportlab_modules,
     hookspath=['.'],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['pylibdmtx'],
+    excludes=[],
     noarchive=False,
 )
 
-# Проверяем, что QR модуль точно включен
-qr_found = any('reportlab.graphics.barcode.qr' in str(imp) for imp in a.pure)
-print(f"QR модуль найден в сборке: {qr_found}")
+reportlab_found = any('reportlab' in str(imp) for imp in a.pure)
+flask_found = any('flask' in str(imp) for imp in a.pure)
+print(f"ReportLab moduke found: {reportlab_found}")
+print(f"Flask Module found: {flask_found}")
 
 pyz = PYZ(a.pure)
 
@@ -78,7 +90,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False, 
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
