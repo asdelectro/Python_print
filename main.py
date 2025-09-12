@@ -79,30 +79,46 @@ def get_config_status():
 @app.route("/device_status")
 def device_status():
     try:
-        device = rc_client.get_single_device()
-        handle = device["handle"]
-        mcu_id = device["mcu_id"]
-        serial = device["serial"]
-        db_info = device["db_info"]
+        # First check if any devices are actually connected
+        device_count = rc_client.get_device_count()
 
-        mcu_str = " ".join(f"{b:02X}" for b in mcu_id) if mcu_id else "Error"
-
-        tests_ok = db_info.get("tests_ok", 0) == 1
-        calibration_ok = db_info.get("calibration_ok", 0) == 1
-        prog_time_ok = db_info.get("prog_time", 0) > 0
-        calib_time_ok = db_info.get("calib_time", 0) > 0
-
-        if config.DEVICE_VALIDATION_ENABLED:
-            device_ready = (
-                tests_ok and calibration_ok and prog_time_ok and calib_time_ok
-            )
+        if device_count == 0:
+            response_data = {
+                "success": False,
+                "message": "No devices connected",
+                "device_count": 0,
+            }
+        elif device_count > 1:
+            response_data = {
+                "success": False,
+                "message": f"Multiple devices connected ({device_count}). Only single device supported.",
+                "device_count": device_count,
+            }
         else:
-            device_ready = tests_ok
+            # Exactly one device - get its data
+            device = rc_client.get_single_device()
+            handle = device["handle"]
+            mcu_id = device["mcu_id"]
+            serial = device["serial"]
+            db_info = device["db_info"]
 
-        status = "READY" if device_ready else "NOT READY"
+            mcu_str = " ".join(f"{b:02X}" for b in mcu_id) if mcu_id else "Error"
 
-        return jsonify(
-            {
+            tests_ok = db_info.get("tests_ok", 0) == 1
+            calibration_ok = db_info.get("calibration_ok", 0) == 1
+            prog_time_ok = db_info.get("prog_time", 0) > 0
+            calib_time_ok = db_info.get("calib_time", 0) > 0
+
+            if config.DEVICE_VALIDATION_ENABLED:
+                device_ready = (
+                    tests_ok and calibration_ok and prog_time_ok and calib_time_ok
+                )
+            else:
+                device_ready = tests_ok
+
+            status = "READY" if device_ready else "NOT READY"
+
+            response_data = {
                 "success": True,
                 "handle": f"{handle:X}",
                 "mcu_id": mcu_str,
@@ -114,10 +130,24 @@ def device_status():
                 "status": status,
                 "device_ready": device_ready,
                 "validation_enabled": config.DEVICE_VALIDATION_ENABLED,
+                "device_count": 1,
             }
-        )
+
+        # Create response with no-cache headers for webview
+        response = jsonify(response_data)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+        return response
+
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
+        response_data = {"success": False, "message": str(e), "device_count": 0}
+        response = jsonify(response_data)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
 
 @app.route("/get_device_info")

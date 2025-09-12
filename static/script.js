@@ -11,7 +11,8 @@ let deviceReady = false;
 let autoModeEnabled = false;
 let autoCheckInterval = null;
 let autoResetTimeout = null;
-let lastProcessedSerial = null; // Запоминаем последнее обработанное устройство
+let lastProcessedSerial = null; 
+let failedDevices = new Set();          // Set of device serials that failed validation
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
@@ -181,6 +182,8 @@ function stopAutoMode() {
     lastProcessedSerial = null;
     
     showStatus('Автоматический режим отключен', 'success');
+    // Clear failed devices list when switching to manual mode
+    failedDevices.clear();
     resetProcess();
 }
 
@@ -188,13 +191,30 @@ async function autoCheckDevice() {
     if (!autoModeEnabled) return;
     
     try {
-        const response = await fetch('/device_status');
+        // Add cache-busting to prevent webview caching issues
+        const timestamp = Date.now();
+        const response = await fetch(`/device_status?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
         const result = await response.json();
         
-        if (result.success && result.serial) {
-            // Check if this is the same device we just processed
+        if (result.success && result.serial&& result.device_count === 1) {
+            // Check if this device has already failed validation
+            if (failedDevices.has(result.serial)) {
+                document.getElementById('deviceSerial').textContent = `❌ НЕ ПРОШЛО ПРОВЕРКУ: ${result.serial}`;
+                document.getElementById('progressText').textContent = 'Устройство не прошло проверки - отключите его';
+                showStatus('❌ Это устройство уже не прошло проверки - отключите его', 'error');
+                return; // Do not process further
+            } 
+
+            // Check if this is the same device we just processed successfully
             if (lastProcessedSerial === result.serial) {
-                // Same device still connected - show warning
+                // Same device still connected - show warning to disconnect
                 if (currentStep === 0) { // Only show if we're in waiting state
                     document.getElementById('deviceSerial').textContent = `⚠️ ОТКЛЮЧИТЕ УСТРОЙСТВО: ${result.serial}`;
                     document.getElementById('progressText').textContent = 'Отключите обработанное устройство для продолжения';
@@ -203,9 +223,9 @@ async function autoCheckDevice() {
                 return; // Don't process the same device again
             }
             
-            // New device found - proceed with automatic flow
+            // New device found - proceed with automatic processing flow
             if (deviceSerial !== result.serial || currentStep < 1) {
-                // New device or restart
+                // New device or restart processing
                 deviceSerial = result.serial;
                 lastProcessedSerial = null; // Reset since we're starting new processing
                 document.getElementById('deviceSerial').textContent = deviceSerial;
@@ -213,7 +233,7 @@ async function autoCheckDevice() {
                 // Step 1: Connect
                 updateStepState('step1', 'active');
                 updateProgress(1);
-                autoScrollToActiveStep(); // Auto scroll to step 1
+                autoScrollToActiveStep();
                 
                 setTimeout(() => {
                     updateStepState('step1', 'completed');
@@ -224,15 +244,18 @@ async function autoCheckDevice() {
                 }, 500);
             }
         } else {
-            // No device - reset if needed
+            // No device detected - reset if needed
             if (currentStep > 0) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 resetProcess();
                 showStatus('Устройство отключено - ожидание нового подключения', 'error');
             }
             
-            // Clear the last processed serial when no device connected
-            if (lastProcessedSerial && currentStep === 0) {
+            // Clear processed device memory when no device connected
+            if (currentStep === 0) {
                 lastProcessedSerial = null;
+                // Also clear failed devices list when device disconnects
+                failedDevices.clear();
                 document.getElementById('deviceSerial').textContent = 'Автоматический режим: Ожидание устройства...';
                 document.getElementById('progressText').textContent = 'Автоматический режим: Ожидание устройства';
             }
@@ -242,43 +265,48 @@ async function autoCheckDevice() {
     }
 }
 
+
 async function autoValidateDevice(deviceData) {
     if (!autoModeEnabled) return;
     
     updateStepState('step2', 'active');
     updateProgress(2);
-    autoScrollToActiveStep(); // Auto scroll to step 2
+    autoScrollToActiveStep();
     
-    // Show device status box
+    // Show device status information box
     document.getElementById('deviceStatusBox').style.display = 'block';
     
-    // Update status display
+    // Update status display with device data
     document.getElementById('serialValue').textContent = deviceData.serial || 'Error';
     document.getElementById('testsValue').textContent = deviceData.tests_ok;
     document.getElementById('calibValue').textContent = deviceData.calibration_ok;
     document.getElementById('statusValue').textContent = deviceData.status;
     
-    // Update icons
+    // Check device validation parameters
     const testsOk = deviceData.tests_ok === 1;
     const calibOk = deviceData.calibration_ok === 1;
     const progTimeOk = deviceData.prog_time > 0;
     const calibTimeOk = deviceData.calib_time > 0;
     
+    // Update validation status icons
     document.getElementById('serialIcon').textContent = deviceData.serial ? '✅' : '❌';
     document.getElementById('testsIcon').textContent = testsOk ? '✅' : '❌';
     document.getElementById('calibIcon').textContent = calibOk ? '✅' : '❌';
     
-    // Determine device readiness
+    // Determine overall device readiness based on validation settings
     let isReady = false;
     if (deviceValidationEnabled) {
+        // Full validation required
         isReady = testsOk && calibOk && progTimeOk && calibTimeOk;
     } else {
+        // Test mode - only serial number required
         isReady = deviceData.serial && deviceData.serial !== 'Error';
     }
     
     document.getElementById('statusIcon').textContent = isReady ? '✅' : '❌';
     
     if (isReady) {
+        // Device passed validation - proceed to printing
         deviceReady = true;
         updateStepState('step2', 'completed');
         document.querySelector('#step2 .step-description').textContent = 'Устройство автоматически верифицировано';
@@ -286,16 +314,18 @@ async function autoValidateDevice(deviceData) {
         const modeText = deviceValidationEnabled ? '' : ' (тестовый режим)';
         showStatus(`✅ Устройство готово - автоматическая печать${modeText}`, 'success');
         
-        // Automatically start printing after 1 second
+        // Automatically start printing after 1 second delay
         setTimeout(() => {
             if (autoModeEnabled) {
                 autoPrintLabel();
             }
         }, 1000);
     } else {
+        // Device failed validation - add to failed devices list
         deviceReady = false;
         updateStepState('step2', 'pending');
         
+        // Build detailed error message
         let errorMsg = 'Устройство не готово (авто): ';
         if (!deviceData.serial || deviceData.serial === 'Error') {
             errorMsg += 'Серийный номер не получен. ';
@@ -307,17 +337,21 @@ async function autoValidateDevice(deviceData) {
             if (!calibTimeOk) errorMsg += 'Время калибровки не установлено. ';
         }
         
-        showStatus('❌ ' + errorMsg, 'error');
+        // Add device to failed devices blacklist
+        failedDevices.add(deviceData.serial);
         
-        // Reset after 3 seconds to check again
+        showStatus('❌ ' + errorMsg + ' ОТКЛЮЧИТЕ УСТРОЙСТВО!', 'error');
+        
+        // Display warning to disconnect failed device
+        document.getElementById('deviceSerial').textContent = `❌ НЕ ПРОШЛО ПРОВЕРКУ: ${deviceData.serial}`;
+        document.getElementById('progressText').textContent = 'Устройство не прошло проверки - отключите его';
+        
+        // Scroll to error message at the top after short delay
         setTimeout(() => {
-            if (autoModeEnabled) {
-                resetProcess();
-            }
-        }, 3000);
+            scrollToElement('deviceSerial', 150);
+        }, 1500);
     }
 }
-
 async function autoPrintLabel() {
     if (!autoModeEnabled || !deviceReady || !deviceSerial) return;
     
@@ -548,36 +582,46 @@ async function connectDevice() {
     updateProgress(1);
     
     try {
-        const response = await fetch('/device_status');
+        // Add cache-busting to prevent webview caching issues
+        const timestamp = Date.now();
+        const response = await fetch(`/device_status?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
         const result = await response.json();
         
         if (result.success && result.serial) {
             deviceSerial = result.serial;
             document.getElementById('deviceSerial').textContent = deviceSerial;
             
-            // Update step 1 as completed
+            // Mark step 1 as completed
             updateStepState('step1', 'completed');
             document.querySelector('#step1 .step-description').textContent = 'Устройство успешно подключено';
             
-            // Automatically start step 2
+            // Automatically start step 2 validation
             updateStepState('step2', 'active');
             updateProgress(2);
             
-            // Show device status box
+            // Show device status information
             document.getElementById('deviceStatusBox').style.display = 'block';
             
-            // Update status display
+            // Update device status display
             document.getElementById('serialValue').textContent = result.serial || 'Error';
             document.getElementById('testsValue').textContent = result.tests_ok;
             document.getElementById('calibValue').textContent = result.calibration_ok;
             document.getElementById('statusValue').textContent = result.status;
             
-            // Update icons
+            // Check validation parameters
             const testsOk = result.tests_ok === 1;
             const calibOk = result.calibration_ok === 1;
             const progTimeOk = result.prog_time > 0;
             const calibTimeOk = result.calib_time > 0;
             
+            // Update validation icons
             document.getElementById('serialIcon').textContent = result.serial ? '✅' : '❌';
             document.getElementById('testsIcon').textContent = testsOk ? '✅' : '❌';
             document.getElementById('calibIcon').textContent = calibOk ? '✅' : '❌';
@@ -593,11 +637,12 @@ async function connectDevice() {
             document.getElementById('statusIcon').textContent = isReady ? '✅' : '❌';
             
             if (isReady) {
+                // Device is ready for printing
                 deviceReady = true;
                 updateStepState('step2', 'completed');
                 document.querySelector('#step2 .step-description').textContent = 'Устройство верифицировано и готово';
                 
-                // Enable step 3
+                // Enable manual printing step
                 document.getElementById('printBtn').disabled = false;
                 updateStepState('step3', 'active');
                 updateProgress(3);
@@ -606,10 +651,12 @@ async function connectDevice() {
                 const modeText = deviceValidationEnabled ? '' : ' (тестовый режим)';
                 showStatus(`✅ Устройство прошло проверку и готово к печати${modeText}`, 'success');
             } else {
+                // Device validation failed
                 deviceReady = false;
                 updateStepState('step2', 'pending');
                 updateProgress(2);
                 
+                // Build error message
                 let errorMsg = 'Устройство не готово: ';
                 if (!result.serial || result.serial === 'Error') {
                     errorMsg += 'Серийный номер не получен. ';
@@ -625,6 +672,7 @@ async function connectDevice() {
             }
             
         } else {
+            // Device connection failed
             updateStepState('step1', 'pending');
             updateProgress(0);
             showStatus('❌ Ошибка подключения устройства: ' + (result.message || 'Неизвестная ошибка'), 'error');
