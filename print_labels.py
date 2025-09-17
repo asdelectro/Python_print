@@ -1,4 +1,3 @@
-# Simplified label printer with Data Matrix instead of QR
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from PyPDF2 import PdfReader, PdfWriter
@@ -93,16 +92,6 @@ class LabelPrinter:
         acrobat = config["acrobat"]
         self.acrobat_path = acrobat["path"]
 
-        # Database settings
-        db = config["database"]
-        self.db_config = {
-            "host": db["host"],
-            "port": db["port"],
-            "database": db["name"],
-            "user": db["user"],
-            "password": db["password"],
-        }
-
         # Get computer name for station_id
         self.station_id = socket.gethostname()
 
@@ -131,62 +120,6 @@ class LabelPrinter:
                     pass
 
             self.logger = NullLogger()
-
-    def get_db_connection(self):
-        """Connect to PostgreSQL database"""
-        try:
-            conn = psycopg2.connect(**self.db_config)
-            return conn
-        except Exception as e:
-            self.logger.error(f"Database connection error: {e}")
-            return None
-
-    def save_device_to_db(self, barcode: str):
-        """Save device to database with preready status"""
-        try:
-            self.logger.info(f"Saving to database: {barcode}")
-
-            conn = self.get_db_connection()
-            if not conn:
-                raise Exception("Failed to connect to database")
-
-            try:
-                with conn.cursor() as cursor:
-                    sql = """
-                    INSERT INTO ready_devices (barcode, scanner_id, scan_timestamp, station_id, status)
-                    VALUES (%s, %s, NOW(), %s, %s)
-                    ON CONFLICT (barcode)
-                    DO UPDATE SET
-                        scan_timestamp = NOW(),
-                        updated_at = NOW(),
-                        scanner_id = EXCLUDED.scanner_id,
-                        station_id = EXCLUDED.station_id,
-                        status = EXCLUDED.status
-                    RETURNING id;
-                    """
-
-                    cursor.execute(
-                        sql, (barcode, "print_label", self.station_id, "preready")
-                    )
-                    result = cursor.fetchone()
-                    conn.commit()
-
-                    if result:
-                        self.logger.info(f"Successfully saved to database: {barcode}")
-                        return True
-                    else:
-                        raise Exception("No result from database")
-
-            except Exception as db_error:
-                conn.rollback()
-                self.logger.error(f"SQL error: {db_error}")
-                raise
-            finally:
-                conn.close()
-
-        except Exception as e:
-            self.logger.error(f"Database save error: {e}")
-            return False
 
     def create_datamatrix_image(self, data: str, size_pixels: int = None):
         """Create Data Matrix image"""
@@ -617,10 +550,6 @@ class LabelPrinter:
         self.logger.info(f"Processing label: {serial_number}")
 
         try:
-            # Save to database
-            if not self.save_device_to_db(serial_number):
-                raise Exception("Database save error")
-
             # Create label
             if not self.create_label(
                 serial_number, template_pdf, output_pdf, add_datamatrix
@@ -655,7 +584,7 @@ if __name__ == "__main__":
 
     # Create and print label (test without actual printing)
     result = printer.create_and_print_label(
-        "RC-110-000000",
+        "RC-103G-000000",
         "template51x25.pdf",
         output_pdf="web_label.pdf",
         print_after_create=True,  # Don't print, just create PDF

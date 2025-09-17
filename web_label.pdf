@@ -44,7 +44,7 @@ endobj
 /Properties <<
 /MC0 22 0 R
 >>
-/ProcSet [ /ImageB /Text /ImageI /PDF /ImageC ]
+/ProcSet [ /ImageB /Text /PDF /ImageI /ImageC ]
 >>
 /Thumb 25 0 R
 /TrimBox [ 0 0 144 72 ]
@@ -55,7 +55,7 @@ endobj
 endobj
 5 0 obj
 <<
-/Length 14337
+/Length 14338
 >>
 stream
 q
@@ -662,8 +662,8 @@ BT
 ET
 0 0 0 rg
 BT
-1 0 0 1 95.10236 47.76378 Tm
-(RC\055110\055000000) Tj
+1 0 0 1 90.85039 47.76378 Tm
+(RC\055103G\055000000) Tj
 T*
 ET
 BT
@@ -672,7 +672,7 @@ BT
 ET
 0 0 0 rg
 BT
-1 0 0 1 95.10236 53.85827 Tm
+1 0 0 1 90.85039 53.85827 Tm
 (Ser\056No\056) Tj
 T*
 ET
@@ -682,7 +682,7 @@ BT
 ET
 BT
 1 0 0 1 5.669291 53.85827 Tm
-(Type\040RADIACODE\055110) Tj
+(Type\040RADIACODE\055103G) Tj
 T*
 ET
 BT
@@ -691,7 +691,7 @@ BT
 ET
 BT
 1 0 0 1 70.86614 5.669291 Tm
-(FCC\040ID\072\0402BDDP\055110) Tj
+(FCC\040ID\072\0402BDDP\055103) Tj
 T*
 ET
 BT
@@ -706,22 +706,22 @@ T*
 ET
 BT
 1 0 0 1 97.79528 37.13386 Tm
-(0\0568\040A) Tj
+(0\0565\040A) Tj
 T*
 ET
 BT
 1 0 0 1 125.8583 37.13386 Tm
-(4\0560\040W) Tj
+(2\0565\040W) Tj
 T*
 ET
 BT
 1 0 0 1 94.11024 31.74803 Tm
-(1500\040mAh) Tj
+(1000\040mAh) Tj
 T*
 ET
 BT
-1 0 0 1 123.0236 31.74803 Tm
-(5\05655\040Wh) Tj
+1 0 0 1 125.0079 31.74803 Tm
+(3\0567\040Wh) Tj
 T*
 ET
 q
@@ -2459,10 +2459,10 @@ endobj
 /Subtype /Image
 /Type /XObject
 /Width 118
-/Length 952
+/Length 852
 >>
 stream
-Gb"/`_/[CY&-ADPdcUVsWu\[<d?On(=W5rEX/`2"WiE)!WiE)!l>uXk6f:Egft<`?=R*b/po_Du\o8J"/$Pj&r0[p7AVCGqEYToPQ:Hc:5`Cu/0O_4K8j!)_XB^GcMrdgq!>&c&.SNqqNtMtR(b8Zr_I@eTGQ>Za\I'"9jU=C*biW.q>r\r=S5pG$WsbiUL!rrZ0b\`*"D2)0PebLrh'dhW(a^O_1LW47?l"Jg$-Z)qN=qV4@8[._'6^,RAmq'Ic2bf"Y[?$sND"sj>rW;Y_J)g_:4p,s)YB,F5p!'@HPL:tJ;1-M>qt"`^'5L]Nc`6NZhPGPa?%`aPKi*&THWVl=%kN1YCVG0,@*%W/A;>bPm-`_$<BmjMLh.Z\\OE&X:!RO?n$/J-UV#OY!9a#joS>5Z79+/Ju-ZpSd]11\GcV(R0u+pb,TFZ$'nJHJ_'P=KujMd_H0jt'a&U;q'u[7_Xgh;e:m(h)!J44k?&jcj`=qP0&2-qT.^$oN9/NBhhA=_](!<cQI#S8R$h&bJ;M]8>"T*;K`NMmlY%^nYS@A0.'98@Pe^<:@%t#gQ;Rcg@=X3_3a,,^CkVm:9']n&b?7-;Ri>!pidDNP$`DBX30!@CBlk.dUE?f2n]#=.gM5`LJ0nrKZaiHK=TM7Di+@%cS?i9cTY\n8%QS/*1dQb`boLiM$>>"q2k)niS/%-;^9P(G4CgNaXgR"r*RTc3OL<YcPBB8D[R8VLlV5qBXk4+dCTTNu8$l_eA?E8rA0''T/S9F\_MescZ;SnLkm2*\!\Cd4<HE2UKOK3_3p=XW0k[=-YT4(TfFCs,ac-pfmE+Rb,:ga'6T\DR^s0g9Ou:3Ubgm+09Is=F*5u`r^qdmO28rG:ed;gZ/6Pmk`GDZl^r2Bn`DOk1$4KTZrH5(%W!fNRL"#>(Bm&CA\o:j(_GsT9<E3%!<E3%!<=+'U#E!)L~>
+Gb"/`6#PaK&B"5AT?\Ku1]ki?WFH(l\Z2K8Ism00LkpkCLkr^1Ii#mojcP`_aWiAoXPr%dgd8msriO$h2#L+d\*V7:fU\+7Ys')OZWJ:Yk?4mIL@ZtI8&KTfl_EE$X7^KZLoE@W<.]kVBR#Mkf4]DgL=`XC.Z`q..OX#SKT,1N1Td(f$+DE.UO(-XCSl-hm7PHu*])96WLRq>&i-K-bd:t3-etkXYa7Sh#a]8M*(.VZ1qZ;qCG`[n_eX-q-1raKi-2t;X75PU;.9/.fP2/X*Ao=jh>pi__RlR4L"SOqX&XCge>P'J#AgdTmuA;$B((8P<ag/NlfDVf^t-W.26>cUQA.9pW\PK!Qh^`<Y;;Gi//m$MDLiNrjb/iFT\af!XC*M*S;[[FY$59;;`WfI1oPWS!\9Y\#q)K6^$?G9_,O/h)%Gk:\%i@5=;GtsAmU1Gf4]DgL=^*`NJ?%a$o9[jRMi7r1FcPO%#\^I.aa2I(,Nk&R>OTnUQWU?Y\9o.'$[@c0f(ALWMi3@.Tst(Me4Fgd>Z5k-gSIYn0grIlRWLKZS]>?ddT:j_]NLHc6OI`;6?1W%YXN-$"0Xl+c0ea591$qYnOoHb<loe?@FpHemg(XR?iURR_AW@+KWUY!&H2;8Mkeiks/@3SH*8**g141o$`/ohT6F#dHmDr]bVMmUZ"'K?DHI:)IClRlI_*_?_.`A:XJT,cgD.H/Iglsfp7Ba_JDl_H""/Sq:4G)jeu3VV+eB&>d:ER;6?K`R;`PD@U#+m>!\E/i>-CO[OOeTJgt?K/`;M'<K:et<Q]u!^_PV(*7YC*A`Od>YL2hX%Bn1K)@`la)&<er&J5Te&R"TF%AhQB~>
 endstream
 endobj
 22 0 obj
@@ -2523,28 +2523,28 @@ xref
 0000000114 00000 n 
 0000000163 00000 n 
 0000000714 00000 n 
-0000015104 00000 n 
-0000015192 00000 n 
-0000015482 00000 n 
-0000017276 00000 n 
-0000082865 00000 n 
-0000148455 00000 n 
-0000214045 00000 n 
-0000279635 00000 n 
-0000345225 00000 n 
-0000386132 00000 n 
-0000386255 00000 n 
-0000386694 00000 n 
-0000386982 00000 n 
-0000395023 00000 n 
-0000395131 00000 n 
-0000395244 00000 n 
-0000396385 00000 n 
-0000396466 00000 n 
-0000396500 00000 n 
-0000396602 00000 n 
-0000396809 00000 n 
-0000396860 00000 n 
+0000015105 00000 n 
+0000015193 00000 n 
+0000015483 00000 n 
+0000017277 00000 n 
+0000082866 00000 n 
+0000148456 00000 n 
+0000214046 00000 n 
+0000279636 00000 n 
+0000345226 00000 n 
+0000386133 00000 n 
+0000386256 00000 n 
+0000386695 00000 n 
+0000386983 00000 n 
+0000395024 00000 n 
+0000395132 00000 n 
+0000395245 00000 n 
+0000396286 00000 n 
+0000396367 00000 n 
+0000396401 00000 n 
+0000396503 00000 n 
+0000396710 00000 n 
+0000396761 00000 n 
 trailer
 <<
 /Size 28
@@ -2552,5 +2552,5 @@ trailer
 /Info 2 0 R
 >>
 startxref
-397393
+397294
 %%EOF

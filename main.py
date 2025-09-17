@@ -19,7 +19,7 @@ class Config:
     REQUIRE_PROG_TIME = True
     REQUIRE_CALIB_TIME = True
     PHYSICAL_PRINT_ENABLED = True
-    WEBHOOK_API_BASE = "http://192.168.88.132:3000/api"
+    WEBHOOK_API_BASE = "http://192.168.88.132:3000"
     WEBHOOK_TIMEOUT = 5
 
 
@@ -215,41 +215,30 @@ def check_scan_status():
         if not barcode:
             return jsonify({"success": False, "message": "Штрихкод пустой"})
 
+        # Простой GET запрос к новому endpoint
         response = requests.get(
-            f"{config.WEBHOOK_API_BASE}/devices",
-            params={"limit": 100},
+            f"{config.WEBHOOK_API_BASE}/api/device/{barcode}",
             timeout=config.WEBHOOK_TIMEOUT,
         )
 
         if response.status_code == 200:
-            devices_data = response.json()
-            devices = devices_data.get("devices", [])
-
-            for device in devices:
-                if device.get("barcode") == barcode:
-                    return jsonify(
-                        {
-                            "success": True,
-                            "scanned": True,
-                            "status": device.get("status", "unknown"),
-                            "timestamp": device.get("scan_timestamp"),
-                        }
-                    )
-
+            result = response.json()
             return jsonify(
                 {
                     "success": True,
-                    "scanned": False,
-                    "message": "Штрихкод еще не отсканирован",
+                    "scanned": True,
+                    "status": result["status"],
+                    "manufacturing_date": result["manufacturing_date"],
+                    "message": f"Устройство {result['status']} (возраст: {result['age_minutes']} минут)",
                 }
             )
-        else:
+        elif response.status_code == 404:
             return jsonify(
-                {"success": False, "message": "Ошибка получения данных сканирования"}
+                {"success": True, "scanned": False, "message": "Устройство не найдено"}
             )
+        else:
+            return jsonify({"success": False, "message": "Ошибка получения данных"})
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "message": f"Ошибка соединения: {str(e)}"})
     except Exception as e:
         return jsonify({"success": False, "message": f"Ошибка: {str(e)}"})
 
