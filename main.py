@@ -246,30 +246,39 @@ def check_scan_status():
 @app.route("/get_scanned_items")
 def get_scanned_items():
     try:
+
+        limit = request.args.get("limit", 10, type=int)
+        minutes = request.args.get("minutes", 30, type=int)
+
         response = requests.get(
-            f"{config.WEBHOOK_API_BASE}/devices",
-            params={"limit": 10},
+            f"{config.WEBHOOK_API_BASE}/api/devices",
+            params={"limit": limit, "minutes": minutes},
             timeout=config.WEBHOOK_TIMEOUT,
         )
 
         if response.status_code == 200:
-            devices_data = response.json()
-            devices = devices_data.get("devices", [])
-
+            result = response.json()
+            devices = result.get("devices", [])
             formatted_items = []
             for device in devices:
-                try:
-                    scan_time = datetime.fromisoformat(device.get("scan_timestamp", ""))
-                    formatted_time = scan_time.strftime("%d.%m.%Y %H:%M")
-                except:
-                    formatted_time = device.get("scan_timestamp", "Unknown")
+
+                formatted_time = device.get("timestamp", "Unknown")
+
+                if formatted_time == "Unknown":
+                    try:
+                        scan_time = datetime.fromisoformat(
+                            device.get("scan_timestamp", "")
+                        )
+                        formatted_time = scan_time.strftime("%d.%m.%Y %H:%M")
+                    except:
+                        formatted_time = device.get("scan_timestamp", "Unknown")
 
                 formatted_items.append(
                     {
                         "barcode": device.get("barcode", "Unknown"),
                         "status": device.get("status", "unknown"),
                         "timestamp": formatted_time,
-                        "scanner_id": device.get("scanner_id", "unknown"),
+                        "scanner_id": device.get("scanner_id", "manufacturing"),
                     }
                 )
 

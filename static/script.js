@@ -245,10 +245,19 @@ async function autoCheckDevice() {
             }
         } else {
             // No device detected - reset if needed
-            if (currentStep > 0) {
+            if (currentStep > 0 && currentStep < 4) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
                 resetProcess();
                 showStatus('Устройство отключено - ожидание нового подключения', 'error');
+            } else if (currentStep === 4) {
+                // Шаг 4 - ожидание сканирования, НЕ сбрасываем процесс
+                // Показываем что устройство отключено, но продолжаем ждать сканирование
+                if (currentPrintedBarcode) {
+                    document.getElementById('deviceSerial').textContent = `📱 ОЖИДАНИЕ СКАНИРОВАНИЯ: ${currentPrintedBarcode}`;
+                    document.getElementById('progressText').textContent = 'Устройство отключено - ожидание сканирования этикетки';
+                     deviceSerial = '';
+                    // НЕ вызываем resetProcess() - продолжаем ждать сканирование
+                }
             }
             
             // Clear processed device memory when no device connected
@@ -524,7 +533,6 @@ function stopScanChecking() {
 function resetProcess() {
     currentStep = 0;
     currentPrintedBarcode = '';
-    deviceSerial = '';
     deviceReady = false;
     
     // Clear auto reset timeout
@@ -815,5 +823,5 @@ function showStatus(message, type) {
     }
 }
 
-// Auto-refresh scanned items every 10 seconds
-setInterval(loadScannedItems, 10000);
+// Auto-refresh scanned items every 5 minutes
+setInterval(loadScannedItems, 300000); // 300,000 ms = 5 minutes
