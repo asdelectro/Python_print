@@ -791,15 +791,37 @@ async function loadScannedItems() {
             const itemsList = document.getElementById('itemsList');
             const scannedItems = document.getElementById('scannedItems');
             
-            itemsList.innerHTML = result.items.map(item => `
-                <div class="scanned-item">
-                    <div>
-                        <div class="barcode-text">${item.barcode}</div>
-                        <div class="timestamp">${item.timestamp}</div>
+            itemsList.innerHTML = result.items.map(item => {
+                let localTime = 'Unknown';
+                
+                if (item.timestamp) {
+                    try {
+                        // get local time from UTC ISO string
+                        const date = new Date(item.timestamp + 'Z'); // Append 'Z' to indicate UTC
+                        if (!isNaN(date.getTime())) {
+                            localTime = date.toLocaleString('ru-RU', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error parsing timestamp:', e);
+                    }
+                }
+                
+                return `
+                    <div class="scanned-item">
+                        <div>
+                            <div class="barcode-text">${item.barcode}</div>
+                            <div class="timestamp">${localTime}</div>
+                        </div>
+                        <div class="status-badge status-${item.status}">${item.status.toUpperCase()}</div>
                     </div>
-                    <div class="status-badge status-${item.status}">${item.status.toUpperCase()}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
             
             scannedItems.style.display = 'block';
         } else {

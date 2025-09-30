@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Updated Spec file for Data Matrix label printer
+# pyinstaller build.spec  
 
 import os
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files

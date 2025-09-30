@@ -19,7 +19,7 @@ class Config:
     REQUIRE_PROG_TIME = True
     REQUIRE_CALIB_TIME = True
     PHYSICAL_PRINT_ENABLED = True
-    WEBHOOK_API_BASE = "http://192.168.88.132:3000"
+    WEBHOOK_API_BASE = "http://192.168.88.132:9000"
     WEBHOOK_TIMEOUT = 5
 
 
@@ -215,30 +215,74 @@ def check_scan_status():
         if not barcode:
             return jsonify({"success": False, "message": "Штрихкод пустой"})
 
-        # Простой GET запрос к новому endpoint
-        response = requests.get(
-            f"{config.WEBHOOK_API_BASE}/api/device/{barcode}",
+        # Запрашиваем список недавних устройств
+        response = requests.post(
+            f"{config.WEBHOOK_API_BASE}/hooks/get-devices",
+            json={
+                "path": "/api/devices",
+                "limit": 10,  # Увеличиваем лимит для поиска
+                "minutes": 1,  # Ищем за последний час
+            },
             timeout=config.WEBHOOK_TIMEOUT,
         )
 
         if response.status_code == 200:
             result = response.json()
-            return jsonify(
-                {
-                    "success": True,
-                    "scanned": True,
-                    "status": result["status"],
-                    "manufacturing_date": result["manufacturing_date"],
-                    "message": f"Устройство {result['status']} (возраст: {result['age_minutes']} минут)",
-                }
-            )
-        elif response.status_code == 404:
-            return jsonify(
-                {"success": True, "scanned": False, "message": "Устройство не найдено"}
-            )
-        else:
-            return jsonify({"success": False, "message": "Ошибка получения данных"})
 
+            if result.get("success"):
+                devices = result.get("devices", [])
+
+                # Ищем устройство с нужным серийным номером
+                found_device = None
+                for device in devices:
+                    if (
+                        device.get("barcode") == barcode
+                        or device.get("serial") == barcode
+                    ):
+                        found_device = device
+                        break
+
+                if found_device:
+                    # Устройство найдено!
+                    return jsonify(
+                        {
+                            "success": True,
+                            "scanned": True,
+                            "status": found_device.get("status", "ready"),
+                            "manufacturing_date": found_device.get(
+                                "manufacturing_date"
+                            ),
+                            "sale_date": found_device.get("sale_date"),
+                            "age_minutes": found_device.get("age_minutes", 0),
+                            "scanner_id": found_device.get("scanner_id", "unknown"),
+                            "message": f"Устройство {found_device.get('status', 'ready')} (возраст: {found_device.get('age_minutes', 0)} минут)",
+                        }
+                    )
+                else:
+                    # Устройство не найдено в списке
+                    return jsonify(
+                        {
+                            "success": True,
+                            "scanned": False,
+                            "message": "Устройство не найдено в недавно отсканированных",
+                        }
+                    )
+            else:
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": result.get("message", "Ошибка получения данных"),
+                    }
+                )
+        else:
+            return jsonify(
+                {"success": False, "message": f"Ошибка API: {response.status_code}"}
+            )
+
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "message": "Timeout запроса"})
+    except requests.exceptions.RequestException as e:
+        return jsonify({"success": False, "message": f"Ошибка соединения: {str(e)}"})
     except Exception as e:
         return jsonify({"success": False, "message": f"Ошибка: {str(e)}"})
 
@@ -246,13 +290,12 @@ def check_scan_status():
 @app.route("/get_scanned_items")
 def get_scanned_items():
     try:
-
         limit = request.args.get("limit", 10, type=int)
         minutes = request.args.get("minutes", 30, type=int)
 
-        response = requests.get(
-            f"{config.WEBHOOK_API_BASE}/api/devices",
-            params={"limit": limit, "minutes": minutes},
+        response = requests.post(
+            f"{config.WEBHOOK_API_BASE}/hooks/get-devices",
+            json={"path": "/api/devices", "limit": limit, "minutes": minutes},
             timeout=config.WEBHOOK_TIMEOUT,
         )
 
@@ -260,24 +303,13 @@ def get_scanned_items():
             result = response.json()
             devices = result.get("devices", [])
             formatted_items = []
+
             for device in devices:
-
-                formatted_time = device.get("timestamp", "Unknown")
-
-                if formatted_time == "Unknown":
-                    try:
-                        scan_time = datetime.fromisoformat(
-                            device.get("scan_timestamp", "")
-                        )
-                        formatted_time = scan_time.strftime("%d.%m.%Y %H:%M")
-                    except:
-                        formatted_time = device.get("scan_timestamp", "Unknown")
-
                 formatted_items.append(
                     {
                         "barcode": device.get("barcode", "Unknown"),
                         "status": device.get("status", "unknown"),
-                        "timestamp": formatted_time,
+                        "timestamp": device.get("manufacturing_date"),  # ISO formart
                         "scanner_id": device.get("scanner_id", "manufacturing"),
                     }
                 )
