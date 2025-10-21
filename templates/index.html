@@ -28,6 +28,32 @@
                 </div>
             </div>
 
+            <!-- Model Selection -->
+            <div class="step-item" style="margin-bottom: 20px;">
+                <div class="step-icon">🔧</div>
+                <div class="step-content">
+                    <div class="step-title">Выбор модели устройства</div>
+                    <div class="step-description">Выберите модель перед началом работы</div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                        <button class="btn" style="flex: 1; min-width: 120px; padding: 12px;" onclick="selectModel('RC-102')" id="modelRC102">
+                            RC-102
+                        </button>
+                        <button class="btn" style="flex: 1; min-width: 120px; padding: 12px;" onclick="selectModel('RC-103')" id="modelRC103">
+                            RC-103
+                        </button>
+                        <button class="btn" style="flex: 1; min-width: 120px; padding: 12px;" onclick="selectModel('RC-103G')" id="modelRC103g">
+                            RC-103G
+                        </button>
+                        <button class="btn" style="flex: 1; min-width: 120px; padding: 12px;" onclick="selectModel('RC-110')" id="modelRC110">
+                            RC-110
+                        </button>
+                    </div>
+                    <div class="step-note" style="margin-top: 12px;">
+                        ⚠️ При смене модели работа будет остановлена
+                    </div>
+                </div>
+            </div>
+
             <!-- Progress Section -->
             <div class="progress-section">
                 <div class="progress-header">
@@ -123,6 +149,16 @@
                             Наклейте этикетку на устройство и отсканируйте её для завершения процесса
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="step-item" id="statsBlock" style="display: none; margin-bottom: 20px;">
+                <div class="step-icon">📊</div>
+                <div class="step-content">
+                    <div class="step-title">Статистика изготовления</div>
+                    <div class="step-description">Количество изготовленных устройств</div>
+                    <div id="scanStats"></div>
                 </div>
             </div>
 

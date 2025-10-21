@@ -6,6 +6,7 @@ let deviceValidationEnabled = true;
 let physicalPrintEnabled = true;
 let deviceSerial = '';
 let deviceReady = false;
+let selectedModel = ''; // Selected device model
 
 // Auto mode variables
 let autoModeEnabled = false;
@@ -19,6 +20,43 @@ document.addEventListener('DOMContentLoaded', function() {
     getConfigStatus();
     loadScannedItems();
 });
+
+// Model selection functions
+function selectModel(model) {
+    selectedModel = model;
+    updateModelButtons();
+    showStatus(`✅ Выбрана модель: ${model}`, 'success');
+    
+    // Stop auto mode if running
+    if (autoModeEnabled) {
+        stopAutoMode();
+    }
+}
+
+function updateModelButtons() {
+    const models = ['RC-102', 'RC-103', 'RC-103G', 'RC-110'];
+    models.forEach(model => {
+        const btn = document.getElementById(`model${model.replace('-', '').replace('G', 'g')}`);
+        if (btn) {
+            if (selectedModel === model) {
+                btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+                btn.style.opacity = '1';
+            } else {
+                btn.style.background = '';
+                btn.style.opacity = '0.7';
+            }
+        }
+    });
+}
+
+function checkModelMatch(deviceSerial) {
+    if (!selectedModel || !deviceSerial) return true;
+    
+    // Extract model prefix from serial (e.g., "RC-102" from "RC-102-012385")
+    const serialPrefix = deviceSerial.substring(0, deviceSerial.lastIndexOf('-'));
+    
+    return serialPrefix === selectedModel;
+}
 
 // Scroll functions
 function scrollToElement(elementId, offset = 0) {
@@ -150,12 +188,17 @@ function toggleAutoMode() {
 }
 
 function startAutoMode() {
+    if (!selectedModel) {
+        showStatus('❌ Сначала выберите модель устройства!', 'error');
+        return;
+    }
+    
     autoModeEnabled = true;
     document.getElementById('autoModeBtn').style.display = 'none';
     document.getElementById('stopAutoBtn').style.display = 'block';
     document.getElementById('connectBtn').style.display = 'none';
     
-    showStatus('Автоматический режим включен - проверка устройств каждую секунду', 'success');
+    showStatus(`Автоматический режим включен для модели ${selectedModel} - проверка устройств каждую секунду`, 'success');
     
     // Start automatic device checking
     autoCheckInterval = setInterval(autoCheckDevice, 1000);
@@ -204,11 +247,28 @@ async function autoCheckDevice() {
         const result = await response.json();
         
         if (result.success && result.serial&& result.device_count === 1) {
+            // Check model match
+            if (!checkModelMatch(result.serial)) {
+                const detectedModel = result.serial.substring(0, result.serial.lastIndexOf('-'));
+                alert(`⚠️ АВТОМАТИЧЕСКИЙ РЕЖИМ ОСТАНОВЛЕН!\n\nПодключена модель: ${detectedModel}\nВыбрана модель: ${selectedModel}\n\nОтключите устройство!`);
+                showStatus(`❌ ОШИБКА: Подключена модель ${detectedModel}, но выбрана ${selectedModel}! Отключите устройство!`, 'error');
+                document.getElementById('deviceSerial').textContent = `❌ НЕВЕРНАЯ МОДЕЛЬ: ${result.serial}`;
+                document.getElementById('progressText').textContent = `Ожидается ${selectedModel}, подключена ${detectedModel}`;
+                stopAutoMode();
+                return;
+            }
+            
             // Check if this device has already failed validation
             if (failedDevices.has(result.serial)) {
                 document.getElementById('deviceSerial').textContent = `❌ НЕ ПРОШЛО ПРОВЕРКУ: ${result.serial}`;
                 document.getElementById('progressText').textContent = 'Устройство не прошло проверки - отключите его';
                 showStatus('❌ Это устройство уже не прошло проверки - отключите его', 'error');
+                
+                // Offer to check device in diagnostic tool
+                if (confirm(`⚠️ Устройство не прошло проверки!\n\nСерийный номер: ${result.serial}\n\nОткрыть диагностику устройства?`)) {
+                    window.open(`http://192.168.88.132:5000/?serial=${encodeURIComponent(result.serial)}`, '_blank');
+                }
+                
                 return; // Do not process further
             } 
 
@@ -354,6 +414,13 @@ async function autoValidateDevice(deviceData) {
         // Display warning to disconnect failed device
         document.getElementById('deviceSerial').textContent = `❌ НЕ ПРОШЛО ПРОВЕРКУ: ${deviceData.serial}`;
         document.getElementById('progressText').textContent = 'Устройство не прошло проверки - отключите его';
+        
+        // Offer to check device in diagnostic tool
+        setTimeout(() => {
+            if (confirm(`⚠️ Устройство не прошло проверки!\n\nСерийный номер: ${deviceData.serial}\n\nОткрыть диагностику устройства?`)) {
+                window.open(`http://192.168.88.132:5000/?serial=${encodeURIComponent(deviceData.serial)}`, '_blank');
+            }
+        }, 500);
         
         // Scroll to error message at the top after short delay
         setTimeout(() => {
@@ -586,6 +653,11 @@ async function connectDevice() {
         return;
     }
     
+    if (!selectedModel) {
+        showStatus('❌ Сначала выберите модель устройства!', 'error');
+        return;
+    }
+    
     updateStepState('step1', 'active');
     updateProgress(1);
     
@@ -603,6 +675,16 @@ async function connectDevice() {
         const result = await response.json();
         
         if (result.success && result.serial) {
+            // Check model match
+            if (!checkModelMatch(result.serial)) {
+                const detectedModel = result.serial.substring(0, result.serial.lastIndexOf('-'));
+                alert(`⚠️ РАБОТА ОСТАНОВЛЕНА!\n\nПодключена модель: ${detectedModel}\nВыбрана модель: ${selectedModel}\n\nОтключите устройство!`);
+                showStatus(`❌ ОШИБКА: Подключена модель ${detectedModel}, но выбрана ${selectedModel}!`, 'error');
+                updateStepState('step1', 'pending');
+                updateProgress(0);
+                return;
+            }
+            
             deviceSerial = result.serial;
             document.getElementById('deviceSerial').textContent = deviceSerial;
             
@@ -677,6 +759,13 @@ async function connectDevice() {
                 }
                 
                 showStatus('❌ ' + errorMsg, 'error');
+                
+                // Offer to check device in diagnostic tool
+                setTimeout(() => {
+                    if (confirm(`⚠️ Устройство не прошло проверки!\n\nСерийный номер: ${result.serial}\n\nОткрыть диагностику устройства?`)) {
+                        window.open(`http://192.168.88.132:5000/?serial=${encodeURIComponent(result.serial)}`, '_blank');
+                    }
+                }, 500);
             }
             
         } else {
@@ -790,8 +879,70 @@ async function loadScannedItems() {
         if (result.success && result.items.length > 0) {
             const itemsList = document.getElementById('itemsList');
             const scannedItems = document.getElementById('scannedItems');
+            const statsContainer = document.getElementById('scanStats');
+            const statsBlock = document.getElementById('statsBlock');
             
-            itemsList.innerHTML = result.items.map(item => {
+            // Calculate statistics
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            let todayCount = 0;
+            let todayByModel = {};
+            
+            result.items.forEach(item => {
+                // Extract model from barcode (e.g., "RC-102" from "RC-102-012385")
+                const model = item.barcode.substring(0, item.barcode.lastIndexOf('-'));
+                
+                // Check if item is from today
+                if (item.timestamp) {
+                    try {
+                        const itemDate = new Date(item.timestamp + 'Z');
+                        if (itemDate >= todayStart) {
+                            todayCount++;
+                            
+                            if (!todayByModel[model]) {
+                                todayByModel[model] = 0;
+                            }
+                            todayByModel[model]++;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing timestamp:', e);
+                    }
+                }
+            });
+            
+            // Build statistics HTML - only today
+            let statsHTML = '<div style="margin-top: 12px;">';
+            
+            statsHTML += '<div style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.25); border-radius: 12px; padding: 16px;">';
+            statsHTML += '<div style="font-weight: bold; font-size: 16px; margin-bottom: 12px; color: #00d4ff;">🗓️ Сегодня изготовлено:</div>';
+            
+            if (todayCount > 0) {
+                statsHTML += `<div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(255, 215, 0, 0.15); border-radius: 8px; margin-bottom: 8px; font-weight: bold; font-size: 18px;">
+                    <span>Всего:</span><span style="color: #ffd700;">${todayCount}</span>
+                </div>`;
+                
+                const sortedTodayModels = Object.keys(todayByModel).sort();
+                sortedTodayModels.forEach(model => {
+                    const count = todayByModel[model];
+                    statsHTML += `<div style="display: flex; justify-content: space-between; padding: 8px 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-bottom: 5px;">
+                        <span>${model}:</span><span style="color: #00d4ff; font-weight: bold;">${count}</span>
+                    </div>`;
+                });
+            } else {
+                statsHTML += '<div style="text-align: center; color: #8899aa;">Нет записей за сегодня</div>';
+            }
+            statsHTML += '</div>';
+            statsHTML += '</div>';
+            
+            // Display statistics
+            if (statsContainer && statsBlock) {
+                statsContainer.innerHTML = statsHTML;
+                statsBlock.style.display = 'flex';
+            }
+            
+            // Build numbered items list
+            itemsList.innerHTML = result.items.map((item, index) => {
                 let localTime = 'Unknown';
                 
                 if (item.timestamp) {
@@ -814,9 +965,14 @@ async function loadScannedItems() {
                 
                 return `
                     <div class="scanned-item">
-                        <div>
-                            <div class="barcode-text">${item.barcode}</div>
-                            <div class="timestamp">${localTime}</div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="min-width: 30px; height: 30px; background: rgba(0, 212, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #00d4ff; font-size: 14px;">
+                                ${index + 1}
+                            </div>
+                            <div>
+                                <div class="barcode-text">${item.barcode}</div>
+                                <div class="timestamp">${localTime}</div>
+                            </div>
                         </div>
                         <div class="status-badge status-${item.status}">${item.status.toUpperCase()}</div>
                     </div>
@@ -826,6 +982,10 @@ async function loadScannedItems() {
             scannedItems.style.display = 'block';
         } else {
             document.getElementById('scannedItems').style.display = 'none';
+            const statsBlock = document.getElementById('statsBlock');
+            if (statsBlock) {
+                statsBlock.style.display = 'none';
+            }
         }
     } catch (error) {
         console.error('Error loading scanned items:', error);

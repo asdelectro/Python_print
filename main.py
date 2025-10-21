@@ -290,8 +290,8 @@ def check_scan_status():
 @app.route("/get_scanned_items")
 def get_scanned_items():
     try:
-        limit = request.args.get("limit", 10, type=int)
-        minutes = request.args.get("minutes", 30, type=int)
+        limit = request.args.get("limit", 100, type=int)
+        minutes = request.args.get("minutes", 600, type=int)
 
         response = requests.post(
             f"{config.WEBHOOK_API_BASE}/hooks/get-devices",
