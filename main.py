@@ -7,6 +7,9 @@ import requests
 import os
 from datetime import datetime
 import toml
+import sys
+import argparse
+import time
 
 app = Flask(__name__)
 
@@ -326,7 +329,46 @@ def get_scanned_items():
         return jsonify({"success": False, "message": f"Ошибка: {str(e)}", "items": []})
 
 
+# Print comand line
+import time
+
+
+def cli_print_serial(serial: str):
+    print(f"🖨️ CLI-печать серийника: {serial}")
+
+    success = printer.create_and_print_label(
+        serial_number=serial,
+        template_pdf="template51x25.pdf",
+        add_datamatrix=True,
+        print_after_create=True,
+    )
+
+    if success:
+        print("⏳ Ожидание завершения отправки в печать...")
+
+        print("✅ Этикетка отправлена в принтер")
+        sys.exit(0)
+    else:
+        print("❌ Ошибка печати этикетки")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Label Printer")
+    parser.add_argument(
+        "-s",
+        "--serial",
+        help="Серийный номер для печати (CLI режим)",
+        type=str,
+    )
+
+    args = parser.parse_args()
+
+    # --- CLI MODE ---
+    if args.serial:
+        cli_print_serial(args.serial)
+
+    # --- WEB MODE ---
     print("🚀 Запуск веб-сервера принтера этикеток...")
     print("📍 Адрес: http://localhost:5000")
     print(f"🔧 Проверки: {'ВКЛ' if config.DEVICE_VALIDATION_ENABLED else 'ВЫКЛ'}")

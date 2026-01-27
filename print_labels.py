@@ -503,7 +503,7 @@ class LabelPrinter:
             # Wait for printing to complete (give it time to send to printer)
             import time
 
-            time.sleep(5)  # Wait 5 seconds for printing to start
+            time.sleep(7)  # Wait 5 seconds for printing to start
 
             # Force terminate the Acrobat process
             try:
