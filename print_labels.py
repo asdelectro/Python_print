@@ -356,12 +356,59 @@ class LabelPrinter:
             (self.powerWhLabel_x_mm - 0.7) * mm, self.powerWhLabel_y_mm * mm, "5.55 Wh"
         )
 
+    def _Create410Label(self, c, serial_number):
+        """Создание этикетки для RC-410"""
+        c.setFont("Helvetica-Bold", self.serialLabel_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        # "RC-"
+        c.drawString((self.serialLabel_x_mm) * mm, self.serialLabel_y_mm * mm, "RC-")
+        # "410-000000" с микро отступом
+        c.drawString(
+            (self.serialLabel_x_mm + 3.8) * mm,
+            self.serialLabel_y_mm * mm,
+            serial_number[3:],
+        )
+
+        # Add serial prefix number
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(
+            (self.serial_number_prefix_x_mm) * mm,
+            self.serial_number_prefix_y_mm * mm,
+            "Ser.No.",
+        )
+
+        # Add type label
+        c.setFont("Helvetica-Bold", self.typeLabel_font_size)
+        c.drawString(
+            self.typeLabel_x_mm * mm, self.typeLabel_y_mm * mm, "Type RADIACODE ZERO"
+        )
+
+        # Add FCC label
+        c.setFont("Helvetica-Bold", self.powerLabels_font_size)
+        c.drawString(
+            self.fccLabel_x_mm * mm, self.fccLabel_y_mm * mm, "FCC ID: 2BDDP-ZERO"
+        )
+
+        # Add power labels (same as RC-110)
+        c.drawString(self.powerULabel_x_mm * mm, self.powerULabel_y_mm * mm, "5.0 V")
+        c.drawString(self.powerILabel_x_mm * mm, self.powerILabel_y_mm * mm, "3.7 V")
+        c.drawString(self.powerALabel_x_mm * mm, self.powerALabel_y_mm * mm, "0.8 A")
+        c.drawString(self.powerWLabel_x_mm * mm, self.powerWLabel_y_mm * mm, "4.0 W")
+        c.drawString(
+            self.powermAhLabel_x_mm * mm, self.powermAhLabel_y_mm * mm, "1500 mAh"
+        )
+        c.drawString(
+            (self.powerWhLabel_x_mm - 0.7) * mm, self.powerWhLabel_y_mm * mm, "5.55 Wh"
+        )
+
     def _validate_serial_number(self, serial_number: str) -> str:
         patterns = {
             "RC-102": r"^RC-102-\d{6}$",
             "RC-103": r"^RC-103-\d{6}$",
             "RC-103G": r"^RC-103G-\d{6}$",
             "RC-110": r"^RC-110-\d{6}$",
+            "RC-410": r"^RC-410-\d{6}$",
         }
 
         for device_type, pattern in patterns.items():
@@ -418,6 +465,8 @@ class LabelPrinter:
                 self._Create103GLabel(c, serial_number)
             elif device_type == "RC-110":
                 self._Create110Label(c, serial_number)
+            elif device_type == "RC-410":
+                self._Create410Label(c, serial_number)
         except Exception as e:
             self.logger.error(f"Error creating label for {device_type}: {e}")
             return False

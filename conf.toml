@@ -60,7 +60,7 @@ dm_pixels = 300
 
 [printing]
 print_scale = 0.5
-printer_name = "TSC TE300"
+printer_name = "TSC TE300 #2"
 print_dpi = 600
 print_offset_x = 1
 print_offset_y = 5

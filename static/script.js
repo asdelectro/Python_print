@@ -34,7 +34,7 @@ function selectModel(model) {
 }
 
 function updateModelButtons() {
-    const models = ['RC-102', 'RC-103', 'RC-103G', 'RC-110'];
+    const models = ['RC-102', 'RC-103', 'RC-103G', 'RC-110', 'RC-410'];
     models.forEach(model => {
         const btn = document.getElementById(`model${model.replace('-', '').replace('G', 'g')}`);
         if (btn) {
