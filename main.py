@@ -4,6 +4,9 @@ from flask import Flask, render_template, request, jsonify
 from print_labels import LabelPrinter  # Используем упрощенную версию
 from hardware import RCDevicesClient
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import os
 from datetime import datetime
 import toml
@@ -12,6 +15,13 @@ import argparse
 import time
 
 app = Flask(__name__)
+
+INVENTREE_URL = "https://192.168.88.132"
+INVENTREE_TOKEN = "inv-3d1c37e2156c24a5af7e384099de32dfd12e522d-20251015"
+INVENTREE_HEADERS = {
+    "Authorization": f"Token {INVENTREE_TOKEN}",
+    "Content-Type": "application/json",
+}
 
 
 # Configuration settings
@@ -333,9 +343,42 @@ def get_scanned_items():
 import time
 
 
+def inventree_delete_if_exists(serial: str) -> bool:
+    try:
+        response = requests.get(
+            f"{INVENTREE_URL}/api/stock/",
+            params={"serial": serial, "limit": 1},
+            headers=INVENTREE_HEADERS,
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if not data.get("results"):
+            print(f"ℹ️  InvenTree: {serial} не найден")
+            return True  # всё ок, просто нечего удалять
+
+        pk = data["results"][0]["pk"]
+        print(f"🔍 InvenTree: найден ID={pk}, удаляем...")
+        requests.delete(
+            f"{INVENTREE_URL}/api/stock/{pk}/",
+            headers=INVENTREE_HEADERS,
+            timeout=10,
+            verify=False,
+        ).raise_for_status()
+        print(f"🗑️  InvenTree: {serial} удалён")
+        return True
+
+    except Exception as e:
+        print(f"⚠️  InvenTree ошибка: {e}")
+        return True  # не блокируем печать даже при ошибке
+
+
 def cli_print_serial(serial: str):
     print(f"🖨️ CLI-печать серийника: {serial}")
-
+    inventree_delete_if_exists(
+        serial
+    )  # Для возвратов с таможни.Если такой серийник есть удалим.
     success = printer.create_and_print_label(
         serial_number=serial,
         template_pdf="template51x25.pdf",
